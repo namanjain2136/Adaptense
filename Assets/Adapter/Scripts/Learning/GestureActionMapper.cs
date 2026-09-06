@@ -72,6 +72,9 @@ namespace Adapter.Learning
                                   ?? gameObject.AddComponent<ContextAwareDecisionEngine>();
             }
 
+            // Always force InfoPanel hidden at startup regardless of Unity lifecycle order
+            if (infoPanel != null) infoPanel.SetActive(false);
+
             SetupSideDockedUI();
             UpdateScoreCounter();
             UpdateStatusBar("Point to select an object");

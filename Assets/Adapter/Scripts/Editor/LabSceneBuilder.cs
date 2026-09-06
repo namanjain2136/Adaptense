@@ -1,15 +1,16 @@
 ﻿// ============================================================
-// ADAPTER Project — Phase 6
+// ADAPTER Project — Phase 6 (fixed)
 // LabSceneBuilder.cs
 //
-// Editor utility: Adapter > Build Phase 6 Lab Scene
+// Adapter > Build Phase 6 Lab Scene
 //
-// Generates a polished two-table lab scene:
-//   Source Table (left)      — 6 objects to pick up
-//   Destination Table (right)— 6 drop zones to place them in
-//   Floor + back wall        — for spatial grounding
-//   UI Canvas                — info panel, hint banner, score
-//                              counter, status bar
+// KEY DESIGN:  The Lab scene is loaded additively over the
+// Hand Tracking webcam feed.  Any opaque 3D geometry is
+// rendered by the same camera and will block the webcam.
+// Therefore we use NO opaque large geometry (no floor, no
+// wall, no solid tables).  All spatial cues are provided
+// through transparent/glowing UI-canvas overlays and small
+// coloured object spheres/cylinders.
 // ============================================================
 
 using UnityEngine;
@@ -34,63 +35,31 @@ namespace Adapter.EditorScripts
             string scenePath = "Assets/Adapter/Scenes/Lab.unity";
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
 
-            // Remove default camera (Hand Tracking scene provides one)
+            // Remove default camera — Hand Tracking scene provides one
             if (Camera.main != null) GameObject.DestroyImmediate(Camera.main.gameObject);
+            // Remove default directional light to avoid double-lighting
+            var defaultLight = GameObject.Find("Directional Light");
+            if (defaultLight != null) GameObject.DestroyImmediate(defaultLight);
 
-            // ─────────────────────────────────────────────
-            // ENVIRONMENT
-            // ─────────────────────────────────────────────
-
-            // Floor
-            var floor = MakeCube("Floor",
-                new Vector3(0, 0, 0),
-                new Vector3(8f, 0.1f, 5f),
-                new Color(0.22f, 0.22f, 0.24f));
-
-            // Back wall (visual backdrop)
-            var wall = MakeCube("BackWall",
-                new Vector3(0, 1.5f, -2.4f),
-                new Vector3(8f, 3.2f, 0.15f),
-                new Color(0.15f, 0.16f, 0.18f));
-
-            // ─────────────────────────────────────────────
-            // SOURCE TABLE (left)
-            // ─────────────────────────────────────────────
-            var srcTable = MakeCube("SourceTable",
-                new Vector3(-2.0f, 0.52f, 0),
-                new Vector3(2.6f, 1.05f, 1.4f),
-                new Color(0.38f, 0.28f, 0.20f));
-            MakeTableLabel("Source Table", new Vector3(-2.0f, 1.15f, -0.78f));
-
-            // Table legs
-            MakeTableLegs(srcTable.transform.position, srcTable.transform.localScale);
-
-            // ─────────────────────────────────────────────
-            // DESTINATION TABLE (right)
-            // ─────────────────────────────────────────────
-            var dstTable = MakeCube("DestinationTable",
-                new Vector3(2.2f, 0.52f, 0),
-                new Vector3(2.6f, 1.05f, 1.4f),
-                new Color(0.18f, 0.22f, 0.28f));
-            MakeTableLabel("Destination Table", new Vector3(2.2f, 1.15f, -0.78f));
-            MakeTableLegs(dstTable.transform.position, dstTable.transform.localScale);
-
-            // ─────────────────────────────────────────────
-            // 6 OBJECTS + 6 DROP ZONES
-            // ─────────────────────────────────────────────
-            // Object definitions: (name, shape, color, src-x, src-z, dst-x, dst-z)
-            var defs = new (string name, string shape, Color color, float sx, float sz, float dx, float dz)[]
+            // ─────────────────────────────────────────────────────
+            // 6 SMALL INTERACTABLE OBJECTS  (source positions)
+            // Spread across the bottom third of screen-space
+            // (small size so they don't block the webcam too much)
+            // ─────────────────────────────────────────────────────
+            var defs = new (string name, string shape, Color color, float x, float y, float z)[]
             {
-                ("Beaker",      "Cylinder", new Color(0.20f, 0.80f, 0.95f),  -2.8f,  0.3f,  1.45f,  0.35f),
-                ("Book",        "Cube",     new Color(0.88f, 0.25f, 0.25f),  -2.1f,  0.3f,  2.05f,  0.35f),
-                ("Flask",       "Sphere",   new Color(0.25f, 0.85f, 0.40f),  -1.4f,  0.3f,  2.65f,  0.35f),
-                ("Battery",     "Cube",     new Color(0.95f, 0.80f, 0.15f),  -2.8f, -0.3f,  1.45f, -0.35f),
-                ("Lens",        "Cylinder", new Color(0.75f, 0.35f, 0.95f),  -2.1f, -0.3f,  2.05f, -0.35f),
-                ("SampleTube",  "Cylinder", new Color(1.0f,  0.55f, 0.15f),  -1.4f, -0.3f,  2.65f, -0.35f),
+                ("Beaker",     "Cylinder", new Color(0.20f, 0.80f, 0.95f), -1.6f, -1.2f,  3.0f),
+                ("Book",       "Cube",     new Color(0.88f, 0.25f, 0.25f), -0.9f, -1.2f,  3.0f),
+                ("Flask",      "Sphere",   new Color(0.25f, 0.85f, 0.40f), -0.2f, -1.2f,  3.0f),
+                ("Battery",    "Cube",     new Color(0.95f, 0.80f, 0.15f),  0.5f, -1.2f,  3.0f),
+                ("Lens",       "Cylinder", new Color(0.75f, 0.35f, 0.95f),  1.2f, -1.2f,  3.0f),
+                ("SampleTube", "Cylinder", new Color(1.0f,  0.55f, 0.15f),  1.9f, -1.2f,  3.0f),
             };
 
-            float srcTableTopY = 1.07f;   // top surface of source table
-            float dstTableTopY = 1.07f;   // top surface of destination table
+            // Drop zone positions (upper row, same x-spread)
+            var dzPositions = new float[] { -1.6f, -0.9f, -0.2f, 0.5f, 1.2f, 1.9f };
+            float dzY = 0.8f;
+            float dzZ = 3.0f;
 
             GameObject[] objects   = new GameObject[defs.Length];
             GameObject[] dropZones = new GameObject[defs.Length];
@@ -98,85 +67,79 @@ namespace Adapter.EditorScripts
             for (int i = 0; i < defs.Length; i++)
             {
                 var d = defs[i];
-
-                // --- source object ---
-                Vector3 objPos  = new Vector3(d.sx, srcTableTopY + ObjectHalfHeight(d.shape), d.sz);
                 Vector3 objScale = ObjectScale(d.shape);
-                var obj = MakePrimitive(d.name, d.shape, objPos, objScale, d.color);
+                var obj = MakePrimitive(d.name, d.shape,
+                    new Vector3(d.x, d.y, d.z), objScale, d.color);
                 var interactable = obj.AddComponent<InteractableObject>();
                 interactable.objectName = d.name;
                 objects[i] = obj;
 
-                // --- drop zone on destination table ---
-                Vector3 dzPos   = new Vector3(d.dx, dstTableTopY + 0.055f, d.dz);
-                Vector3 dzScale = new Vector3(objScale.x * 1.1f, 0.04f, objScale.z * 1.1f);
-                var dz = MakePrimitive($"DropZone_{d.name}", "Cube", dzPos, dzScale, new Color(0.2f, 0.9f, 1f, 0.35f));
-                var dropZone   = dz.AddComponent<DropZone>();
+                // Drop zone — flat cylinder marker above the objects row
+                var dz = MakePrimitive($"DropZone_{d.name}", "Cylinder",
+                    new Vector3(dzPositions[i], dzY, dzZ),
+                    new Vector3(0.22f, 0.015f, 0.22f),
+                    new Color(0.2f, 0.9f, 1f, 0.3f));
+                var dropZone = dz.AddComponent<DropZone>();
                 dropZone.zoneName = d.name;
                 dropZone.assignedObject = interactable;
                 dropZones[i] = dz;
 
-                // Wire placement target
                 interactable.placementTarget = dz.transform;
             }
 
-            // ─────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────
             // UI CANVAS
-            // ─────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────
             var canvasObj = new GameObject("UICanvas");
             var canvas    = canvasObj.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = canvasObj.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode       = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1280, 720);
             canvasObj.AddComponent<GraphicRaycaster>();
 
             Font font = Resources.GetBuiltinResource<Font>("Arial.ttf");
 
-            // 1. Score counter — top-left
-            var scoreCounter = BuildScoreCounter(canvasObj.transform, font);
+            // Row labels above drop zones (canvas overlay — not 3D text)
+            BuildZoneLabels(canvasObj.transform, font, defs);
 
-            // 2. Status bar — top-center
-            var statusBar = BuildStatusBar(canvasObj.transform, font);
+            // Row labels below objects
+            BuildObjectLabels(canvasObj.transform, font, defs);
 
-            // 3. Hint banner — bottom-center
-            var hintBanner = BuildHintBanner(canvasObj.transform, font);
+            // Score counter — top-left
+            var scoreGo   = BuildScoreCounter(canvasObj.transform, font);
+            // Status bar  — top-center
+            var statusGo  = BuildStatusBar(canvasObj.transform, font);
+            // Hint banner — bottom-center
+            var hintGo    = BuildHintBanner(canvasObj.transform, font);
+            // Info panel  — right edge (starts HIDDEN)
+            var infoPanelGo = BuildInfoPanel(canvasObj.transform, font);
 
-            // 4. Side info panel — right edge
-            var infoPanel = BuildInfoPanel(canvasObj.transform, font);
+            // Divider line — thin horizontal bar to visually separate rows
+            BuildDividerLine(canvasObj.transform);
 
-            // ─────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────
             // GESTURE CONTROLLER
-            // ─────────────────────────────────────────────
-            var controllerObj = new GameObject("HandGestureController");
-            var controller    = controllerObj.AddComponent<GestureController>();
-            controller.infoPanel = infoPanel;
+            // ─────────────────────────────────────────────────────
+            var controllerObj  = new GameObject("HandGestureController");
+            var controller     = controllerObj.AddComponent<GestureController>();
+            controller.infoPanel = infoPanelGo;
 
-            // Wire score counter and status bar into GestureActionMapper
-            // (GestureController creates GestureActionMapper in Awake — we pass refs after)
+            // Pre-add the ActionMapper so GestureController.EnsureInitialized
+            // finds it via GetComponent instead of creating a second one
             var actionMapper = controllerObj.AddComponent<GestureActionMapper>();
-            actionMapper.infoPanel        = infoPanel;
-            actionMapper.hintBanner       = hintBanner;
-            actionMapper.scoreText        = scoreCounter.GetComponentInChildren<Text>();
-            actionMapper.statusBarText    = statusBar.GetComponentInChildren<Text>();
+            actionMapper.infoPanel     = infoPanelGo;
+            actionMapper.hintBanner    = hintGo;
+            actionMapper.scoreText     = scoreGo.GetComponentInChildren<Text>();
+            actionMapper.statusBarText = statusGo.GetComponentInChildren<Text>();
 
-            // ─────────────────────────────────────────────
-            // DIRECTIONAL LIGHT
-            // ─────────────────────────────────────────────
-            var lightObj = new GameObject("DirectionalLight");
-            var light    = lightObj.AddComponent<Light>();
-            light.type      = LightType.Directional;
-            light.intensity = 1.1f;
-            light.color     = new Color(1f, 0.97f, 0.90f);
-            lightObj.transform.rotation = Quaternion.Euler(42f, -30f, 0f);
-
-            // ─────────────────────────────────────────────
-            // SAVE + BUILD SETTINGS
-            // ─────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────
+            // SAVE
+            // ─────────────────────────────────────────────────────
             EditorSceneManager.SaveScene(scene, scenePath);
 
             var original = EditorBuildSettings.scenes;
-            bool found = false;
+            bool found   = false;
             foreach (var s in original) if (s.path == scenePath) { found = true; break; }
             if (!found)
             {
@@ -186,126 +149,127 @@ namespace Adapter.EditorScripts
                 EditorBuildSettings.scenes = updated;
             }
 
-            Debug.Log("[Adaptense] Phase 6 Lab Scene built at " + scenePath);
+            Debug.Log("[Adaptense] Phase 6 Lab Scene (no-block) built at " + scenePath);
         }
 
         // =====================================================
         // Helpers
         // =====================================================
 
-        private static GameObject MakeCube(string name, Vector3 pos, Vector3 scale, Color color)
+        private static GameObject MakePrimitive(string name, string shape,
+            Vector3 pos, Vector3 scale, Color color)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            PrimitiveType pt = shape == "Sphere"   ? PrimitiveType.Sphere
+                             : shape == "Cylinder" ? PrimitiveType.Cylinder
+                                                   : PrimitiveType.Cube;
+            var go = GameObject.CreatePrimitive(pt);
             go.name = name;
             go.transform.position   = pos;
             go.transform.localScale = scale;
-            ApplyColor(go, color);
-            return go;
-        }
-
-        private static GameObject MakePrimitive(string name, string shape, Vector3 pos, Vector3 scale, Color color)
-        {
-            PrimitiveType pType = shape == "Sphere"   ? PrimitiveType.Sphere
-                                : shape == "Cylinder" ? PrimitiveType.Cylinder
-                                                      : PrimitiveType.Cube;
-            var go = GameObject.CreatePrimitive(pType);
-            go.name = name;
-            go.transform.position   = pos;
-            go.transform.localScale = scale;
-            ApplyColor(go, color);
-            return go;
-        }
-
-        private static void ApplyColor(GameObject go, Color color)
-        {
-            var mat = new Material(Shader.Find("Standard"));
-            mat.color = color;
+            var mat   = new Material(Shader.Find("Standard")) { color = color };
             go.GetComponent<Renderer>().sharedMaterial = mat;
-        }
-
-        private static void MakeTableLegs(Vector3 tablePos, Vector3 tableScale)
-        {
-            float legH = tablePos.y - 0.05f;  // height from floor to bottom of table top
-            float hw   = tableScale.x * 0.5f - 0.12f;
-            float hd   = tableScale.z * 0.5f - 0.12f;
-            Color legColor = new Color(0.28f, 0.20f, 0.14f);
-
-            Vector3[] corners = {
-                new Vector3( hw,  0,  hd),
-                new Vector3(-hw,  0,  hd),
-                new Vector3( hw,  0, -hd),
-                new Vector3(-hw,  0, -hd)
-            };
-
-            for (int i = 0; i < 4; i++)
-            {
-                var leg = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                leg.name = "Leg";
-                float cx = tablePos.x + corners[i].x;
-                float cz = tablePos.z + corners[i].z;
-                leg.transform.position   = new Vector3(cx, legH * 0.5f + 0.05f, cz);
-                leg.transform.localScale = new Vector3(0.10f, legH, 0.10f);
-                ApplyColor(leg, legColor);
-            }
-        }
-
-        private static void MakeTableLabel(string text, Vector3 pos)
-        {
-            var go  = new GameObject($"Label_{text}");
-            var tm  = go.AddComponent<TextMesh>();
-            tm.text          = text;
-            tm.fontSize      = 28;
-            tm.characterSize = 0.065f;
-            tm.anchor        = TextAnchor.MiddleCenter;
-            tm.alignment     = TextAlignment.Center;
-            tm.color         = new Color(0.8f, 0.85f, 1f);
-            go.transform.position = pos;
-            go.transform.rotation = Quaternion.Euler(0, 180f, 0);
-        }
-
-        private static float ObjectHalfHeight(string shape)
-        {
-            return shape == "Cylinder" ? 0.25f
-                 : shape == "Sphere"   ? 0.15f
-                                       : 0.08f;
+            return go;
         }
 
         private static Vector3 ObjectScale(string shape)
         {
-            return shape == "Cylinder" ? new Vector3(0.18f, 0.25f, 0.18f)
-                 : shape == "Sphere"   ? new Vector3(0.22f, 0.22f, 0.22f)
-                                       : new Vector3(0.28f, 0.16f, 0.38f);
+            return shape == "Cylinder" ? new Vector3(0.14f, 0.18f, 0.14f)
+                 : shape == "Sphere"   ? new Vector3(0.18f, 0.18f, 0.18f)
+                                       : new Vector3(0.20f, 0.10f, 0.28f);
         }
 
-        // ---- UI factories ----
+        // ---- UI builders ----
+
+        private static void BuildZoneLabels(Transform canvas, Font font,
+            (string name, string shape, Color color, float x, float y, float z)[] defs)
+        {
+            // "PLACE HERE ▼" header above the drop zone row
+            var header = MakeLabel(canvas, "DropZoneHeader",
+                "▼  PLACE HERE  ▼",
+                new Vector2(0, 0.75f), new Vector2(0.5f, 1f),
+                new Vector2(0, 68f), new Vector2(640f, 38f),
+                14, new Color(0.3f, 0.9f, 1f), font);
+        }
+
+        private static void BuildObjectLabels(Transform canvas, Font font,
+            (string name, string shape, Color color, float x, float y, float z)[] defs)
+        {
+            // "PICK UP ▲" footer below the objects row
+            var footer = MakeLabel(canvas, "ObjectRowHeader",
+                "▲  PICK UP  ▲",
+                new Vector2(0, 0.2f), new Vector2(0.5f, 0f),
+                new Vector2(0, -30f), new Vector2(500f, 34f),
+                14, new Color(0.9f, 0.9f, 0.5f), font);
+        }
+
+        private static void BuildDividerLine(Transform canvas)
+        {
+            var go = new GameObject("Divider");
+            go.transform.SetParent(canvas, false);
+            var img = go.AddComponent<Image>();
+            img.color = new Color(0.5f, 0.8f, 1f, 0.25f);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin        = new Vector2(0.1f, 0.5f);
+            r.anchorMax        = new Vector2(0.9f, 0.5f);
+            r.pivot            = new Vector2(0.5f, 0.5f);
+            r.anchoredPosition = new Vector2(0, 0);
+            r.sizeDelta        = new Vector2(0, 2f);
+        }
+
+        private static GameObject MakeLabel(Transform canvas, string objName,
+            string text, Vector2 anchorMin, Vector2 anchorMax,
+            Vector2 anchoredPos, Vector2 sizeDelta,
+            int fontSize, Color textColor, Font font)
+        {
+            var go = new GameObject(objName);
+            go.transform.SetParent(canvas, false);
+            var img  = go.AddComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0.45f);
+            var r    = go.GetComponent<RectTransform>();
+            r.anchorMin        = anchorMin;
+            r.anchorMax        = anchorMax;
+            r.pivot            = new Vector2(0.5f, 0.5f);
+            r.anchoredPosition = anchoredPos;
+            r.sizeDelta        = sizeDelta;
+
+            var tGo  = new GameObject("Text");
+            tGo.transform.SetParent(go.transform, false);
+            var t    = tGo.AddComponent<Text>();
+            t.font      = font;
+            t.fontSize  = fontSize;
+            t.fontStyle = FontStyle.Bold;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.color     = textColor;
+            t.text      = text;
+            var tr   = tGo.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero;
+            tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(8, 4);
+            tr.offsetMax = new Vector2(-8, -4);
+            return go;
+        }
 
         private static GameObject BuildScoreCounter(Transform canvas, Font font)
         {
             var go = new GameObject("ScoreCounter");
             go.transform.SetParent(canvas, false);
-            Image bg = go.AddComponent<Image>();
-            bg.color = new Color(0.05f, 0.08f, 0.14f, 0.88f);
-            RectTransform r = go.GetComponent<RectTransform>();
-            r.anchorMin       = new Vector2(0f, 1f);
-            r.anchorMax       = new Vector2(0f, 1f);
-            r.pivot           = new Vector2(0f, 1f);
-            r.anchoredPosition = new Vector2(20f, -20f);
-            r.sizeDelta       = new Vector2(190f, 56f);
+            go.AddComponent<Image>().color = new Color(0.04f, 0.07f, 0.13f, 0.88f);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(0f, 1f);
+            r.anchorMax = new Vector2(0f, 1f);
+            r.pivot     = new Vector2(0f, 1f);
+            r.anchoredPosition = new Vector2(16f, -16f);
+            r.sizeDelta = new Vector2(180f, 50f);
 
-            var textGo = new GameObject("ScoreText");
-            textGo.transform.SetParent(go.transform, false);
-            var t = textGo.AddComponent<Text>();
-            t.font      = font;
-            t.fontSize  = 20;
-            t.fontStyle = FontStyle.Bold;
-            t.alignment = TextAnchor.MiddleCenter;
-            t.color     = Color.white;
+            var tGo = new GameObject("ScoreText");
+            tGo.transform.SetParent(go.transform, false);
+            var t   = tGo.AddComponent<Text>();
+            t.font      = font; t.fontSize = 20; t.fontStyle = FontStyle.Bold;
+            t.alignment = TextAnchor.MiddleCenter; t.color = Color.white;
             t.text      = "Placed: 0 / 6";
-            var tr = textGo.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero;
-            tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(10f, 6f);
-            tr.offsetMax = new Vector2(-10f, -6f);
+            var tr  = tGo.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(8, 5); tr.offsetMax = new Vector2(-8, -5);
             return go;
         }
 
@@ -313,28 +277,24 @@ namespace Adapter.EditorScripts
         {
             var go = new GameObject("StatusBar");
             go.transform.SetParent(canvas, false);
-            Image bg = go.AddComponent<Image>();
-            bg.color = new Color(0.04f, 0.07f, 0.12f, 0.90f);
-            RectTransform r = go.GetComponent<RectTransform>();
-            r.anchorMin       = new Vector2(0.5f, 1f);
-            r.anchorMax       = new Vector2(0.5f, 1f);
-            r.pivot           = new Vector2(0.5f, 1f);
-            r.anchoredPosition = new Vector2(0f, -20f);
-            r.sizeDelta       = new Vector2(640f, 50f);
+            go.AddComponent<Image>().color = new Color(0.04f, 0.06f, 0.11f, 0.88f);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(0.5f, 1f);
+            r.anchorMax = new Vector2(0.5f, 1f);
+            r.pivot     = new Vector2(0.5f, 1f);
+            r.anchoredPosition = new Vector2(0f, -16f);
+            r.sizeDelta = new Vector2(620f, 46f);
 
-            var textGo = new GameObject("StatusText");
-            textGo.transform.SetParent(go.transform, false);
-            var t = textGo.AddComponent<Text>();
-            t.font      = font;
-            t.fontSize  = 17;
+            var tGo = new GameObject("StatusText");
+            tGo.transform.SetParent(go.transform, false);
+            var t   = tGo.AddComponent<Text>();
+            t.font = font; t.fontSize = 16;
             t.alignment = TextAnchor.MiddleCenter;
-            t.color     = new Color(0.85f, 0.95f, 1f);
-            t.text      = "Point to select an object";
-            var tr = textGo.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero;
-            tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(14f, 5f);
-            tr.offsetMax = new Vector2(-14f, -5f);
+            t.color = new Color(0.85f, 0.95f, 1f);
+            t.text  = "Point to select an object";
+            var tr  = tGo.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(12, 4); tr.offsetMax = new Vector2(-12, -4);
             return go;
         }
 
@@ -342,28 +302,24 @@ namespace Adapter.EditorScripts
         {
             var go = new GameObject("HintBanner");
             go.transform.SetParent(canvas, false);
-            Image bg = go.AddComponent<Image>();
-            bg.color = new Color(0.05f, 0.08f, 0.14f, 0.93f);
-            RectTransform r = go.GetComponent<RectTransform>();
-            r.anchorMin       = new Vector2(0.5f, 0f);
-            r.anchorMax       = new Vector2(0.5f, 0f);
-            r.pivot           = new Vector2(0.5f, 0f);
-            r.anchoredPosition = new Vector2(0f, 28f);
-            r.sizeDelta       = new Vector2(680f, 58f);
+            go.AddComponent<Image>().color = new Color(0.04f, 0.07f, 0.13f, 0.93f);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(0.5f, 0f);
+            r.anchorMax = new Vector2(0.5f, 0f);
+            r.pivot     = new Vector2(0.5f, 0f);
+            r.anchoredPosition = new Vector2(0f, 26f);
+            r.sizeDelta = new Vector2(660f, 52f);
 
-            var textGo = new GameObject("HintText");
-            textGo.transform.SetParent(go.transform, false);
-            var t = textGo.AddComponent<Text>();
-            t.font      = font;
-            t.fontSize  = 17;
+            var tGo = new GameObject("HintText");
+            tGo.transform.SetParent(go.transform, false);
+            var t   = tGo.AddComponent<Text>();
+            t.font = font; t.fontSize = 16;
             t.alignment = TextAnchor.MiddleCenter;
-            t.color     = new Color(0.4f, 0.92f, 1f);
-            t.text      = "Hint will appear here.";
-            var tr = textGo.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero;
-            tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(14f, 6f);
-            tr.offsetMax = new Vector2(-14f, -6f);
+            t.color = new Color(0.4f, 0.92f, 1f);
+            t.text  = "Hint will appear here.";
+            var tr  = tGo.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(12, 5); tr.offsetMax = new Vector2(-12, -5);
 
             go.SetActive(false);
             return go;
@@ -373,31 +329,27 @@ namespace Adapter.EditorScripts
         {
             var go = new GameObject("InfoPanel");
             go.transform.SetParent(canvas, false);
-            Image bg = go.AddComponent<Image>();
-            bg.color = new Color(0.07f, 0.11f, 0.18f, 0.90f);
-            RectTransform r = go.GetComponent<RectTransform>();
-            r.anchorMin       = new Vector2(1f, 0.5f);
-            r.anchorMax       = new Vector2(1f, 0.5f);
-            r.pivot           = new Vector2(1f, 0.5f);
-            r.anchoredPosition = new Vector2(-20f, 0f);
-            r.sizeDelta       = new Vector2(320f, 400f);
+            go.AddComponent<Image>().color = new Color(0.06f, 0.10f, 0.17f, 0.92f);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(1f, 0.5f);
+            r.anchorMax = new Vector2(1f, 0.5f);
+            r.pivot     = new Vector2(1f, 0.5f);
+            r.anchoredPosition = new Vector2(-16f, 0f);
+            r.sizeDelta = new Vector2(300f, 380f);
 
-            var textGo = new GameObject("InfoText");
-            textGo.transform.SetParent(go.transform, false);
-            var t = textGo.AddComponent<Text>();
-            t.font        = font;
-            t.fontSize    = 17;
+            var tGo = new GameObject("InfoText");
+            tGo.transform.SetParent(go.transform, false);
+            var t   = tGo.AddComponent<Text>();
+            t.font = font; t.fontSize = 16;
             t.alignment   = TextAnchor.UpperLeft;
-            t.color       = Color.white;
             t.lineSpacing = 1.3f;
-            t.text        = "<b>LAB INTERACTION</b>\nNo object selected";
-            var tr = textGo.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero;
-            tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(16f, 16f);
-            tr.offsetMax = new Vector2(-16f, -16f);
+            t.color = Color.white;
+            t.text  = "<b>LAB INTERACTION</b>\nNo object selected";
+            var tr  = tGo.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(14, 14); tr.offsetMax = new Vector2(-14, -14);
 
-            go.SetActive(false);
+            go.SetActive(false); // ALWAYS starts hidden
             return go;
         }
     }
