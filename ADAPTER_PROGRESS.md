@@ -72,6 +72,35 @@
 - [x] Build ContextAwareDecisionEngine class
 - [x] Wire decision engine between Phase 2 (gestures) and Phase 4 (actions)
 
+### Phase 6 -- Polished lab environment with pick-and-place
+- [ ] Add second table (Source Table on left, Destination Table on right)
+- [ ] Add 6 interactable objects: Beaker, Book, Flask, Battery, Lens, Sample Tube
+      (distinct shapes and colors for easy identification)
+- [ ] Add floating name labels (TextMesh) above each object
+- [ ] Add floor + walls for spatial grounding
+- [ ] Create DropZone.cs -- semi-transparent target markers on destination table
+      (pulsing cyan = empty, solid green = occupied)
+- [ ] Upgrade InteractableObject.cs for pick-and-place:
+      - `placementTarget` (Transform) for assigned drop zone
+      - `isPlaced` state tracking
+      - `OnPickUp()` -- lifts object, shows ghost preview at drop zone
+      - `OnPlace()` -- smoothly moves object to destination
+      - Distinct visual states: Idle → Selected → Picked Up → Placed (green glow)
+- [ ] Upgrade GestureActionMapper.cs with toggle-pinch flow:
+      - Point → cycle selection with name label highlight
+      - Pinch (1st) → pick up object (lifts off table, ghost at destination)
+      - Pinch (2nd) → place object at drop zone (smooth animation)
+      - Fist → cancel pick-up, return object to original spot
+      - Info panel shows clear state: "PICKED UP → Pinch to place, Fist to cancel"
+- [ ] Add on-screen score counter ("3/6 objects placed")
+- [ ] Update LabSceneBuilder.cs to generate scene with all new objects/tables/zones
+- [ ] Add new LearningTask entries: TransferObjects, SortByColor, FreeExplore
+
+### Phase 7 -- GitHub polish & documentation
+- [ ] Rewrite README.md for Adaptense branding (project overview, setup, architecture)
+- [ ] Add screenshots / GIFs of working interactions
+- [ ] Clean up ADAPTER_PROGRESS.md formatting
+
 ---
 
 ## Completed Log
