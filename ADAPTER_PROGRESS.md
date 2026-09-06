@@ -72,30 +72,23 @@
 - [x] Build ContextAwareDecisionEngine class
 - [x] Wire decision engine between Phase 2 (gestures) and Phase 4 (actions)
 
-### Phase 6 -- Polished lab environment with pick-and-place
-- [x] Add second table (Source Table on left, Destination Table on right)
-- [x] Add 6 interactable objects: Beaker, Book, Flask, Battery, Lens, Sample Tube
-      (distinct shapes and colors for easy identification)
-- [x] Add floating name labels (TextMesh) above each object
-- [x] Add floor + walls for spatial grounding
-- [x] Create DropZone.cs -- semi-transparent target markers on destination table
-      (pulsing cyan = empty, solid green = occupied)
-- [x] Upgrade InteractableObject.cs for pick-and-place:
-      - `placementTarget` (Transform) for assigned drop zone
-      - `isPlaced` state tracking
-      - `OnPickUp()` -- lifts object, shows ghost preview at drop zone
-      - `OnPlace()` -- smoothly moves object to destination
-      - Distinct visual states: Idle → Selected → Picked Up → Placed (green glow)
-- [x] Upgrade GestureActionMapper.cs with toggle-pinch flow:
-      - Point → cycle selection with name label highlight
-      - Pinch (1st) → pick up object (lifts off table, ghost at destination)
-      - Pinch (2nd) → place object at drop zone (smooth animation)
-      - Fist → cancel pick-up, return object to original spot
-      - Info panel shows clear state: "PICKED UP → Pinch to place, Fist to cancel"
-- [x] Add on-screen score counter ("3/6 objects placed")
-- [x] Add top-center status bar with live action instructions
-- [x] Update LabSceneBuilder.cs to generate scene with all new objects/tables/zones
-- [x] Add new LearningTask entries: TransferObjects, SortByColor, FreeExplore
+### Phase 6 — Progressive Gesture Learning (PGL), level-based [Novelty 2]
+- [ ] Define a GestureLevel enum/class: Level1..Level5, each listing which
+      gesture(s) are unlocked at that level
+- [ ] Level 1: Point (Select) + Open Palm (Info panel) + 2-3 objects
+- [ ] Level 2: adds Swipe (Navigate the object to select) + 4 objects
+- [ ] Level 3: adds pinch (Reset/cancel) + 2--4 objects
+- [ ] Level 4: adds fist (Grab/interact) + 3-4 objects
+- [ ] Level 5: all 5 gestures active — mastery/free-interaction level + 5-6 objects
+- [ ] Only gestures unlocked at the current level should reach Phase 4's
+      action mapping; others are visibly ignored (log why)
+- [ ] Define a simple "level task" per level (e.g. Level 1 = select 2
+      different objects AND open 1 info panel) that must be completed to
+      advance — not just a raw use-count
+- [ ] Add a minimal on-screen level indicator + short in-scene instruction
+      text telling the learner what to try at their current level
+- [ ] On reaching Level 5, show a short "all gestures unlocked" message
+- [ ] Log level-up events for later use by PIP (Phase 7)
 
 ### Phase 7 -- GitHub polish & documentation
 - [ ] Rewrite README.md for Adaptense branding (project overview, setup, architecture)
