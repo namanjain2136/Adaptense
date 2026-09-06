@@ -1,18 +1,14 @@
 ﻿// ============================================================
-// ADAPTER Project — Phase 6
+// ADAPTER Project — Phase 6 (Updated Gesture Mapping)
 // GestureActionMapper.cs
 //
 // PURPOSE:
-//   Maps recognized gestures to pick-and-place actions under
-//   the governance of the Phase 5 ContextAwareDecisionEngine.
-//
-//   Gesture flow:
-//     Point      -> Cycle selection (highlight + floating label)
-//     Pinch (1)  -> Pick up selected object
-//     Pinch (2)  -> Place picked-up object at drop zone
-//     Fist       -> Cancel / return object to origin
-//     Open Palm  -> Toggle side info panel
-//     Swipe      -> Advance learning task
+//   Maps recognized gestures according to user specification:
+//     Point     -> Select / Cycle objects
+//     Fist      -> Pick Up (1st Fist) / Place (2nd Fist)
+//     Pinch     -> Reset / Cancel hold
+//     Open Palm -> Open / Toggle Info Panel
+//     Swipe     -> Next Level / Task
 // ============================================================
 
 using System.Collections;
@@ -72,12 +68,12 @@ namespace Adapter.Learning
                                   ?? gameObject.AddComponent<ContextAwareDecisionEngine>();
             }
 
-            // Always force InfoPanel hidden at startup regardless of Unity lifecycle order
+            // Always force InfoPanel hidden at startup
             if (infoPanel != null) infoPanel.SetActive(false);
 
             SetupSideDockedUI();
             UpdateScoreCounter();
-            UpdateStatusBar("Point to select an object");
+            UpdateStatusBar("Point to select an object  |  Fist to move  |  Pinch to reset");
         }
 
         // =====================================================
@@ -120,10 +116,10 @@ namespace Adapter.Learning
             switch (gesture)
             {
                 case GestureType.Point:      SelectNextObject();  break;
-                case GestureType.Pinch:      TogglePinchAction(); break;
+                case GestureType.Fist:       ToggleFistMove();    break;
+                case GestureType.Pinch:      ResetOrCancel();     break;
                 case GestureType.OpenPalm:   OpenInfoPanel();     break;
-                case GestureType.Fist:       CancelOrReset();     break;
-                case GestureType.Swipe:      Navigate();          break;
+                case GestureType.Swipe:      NextLevel();         break;
             }
 
             if (adaptation.Decision == DecisionType.MakeInteractionEasier)
@@ -138,7 +134,7 @@ namespace Adapter.Learning
 
         private void SelectNextObject()
         {
-            if (_isPickedUp) return; // don't cycle while holding something
+            if (_isPickedUp) return; // don't cycle while holding an object
 
             RefreshInteractables();
             if (_interactables.Count == 0) return;
@@ -158,32 +154,32 @@ namespace Adapter.Learning
 
             if (_interactables[_selectedIndex].IsPlaced)
             {
-                UpdateStatusBar("All objects placed! Use Fist to reset.");
+                UpdateStatusBar("All objects placed! Pinch to reset lab.");
                 return;
             }
 
             _interactables[_selectedIndex].OnHoverEnter();
-            UpdateStatusBar($"Selected: {_interactables[_selectedIndex].objectName}  |  Pinch to pick up");
+            UpdateStatusBar($"Selected: {_interactables[_selectedIndex].objectName}  |  Fist to move object");
             Debug.Log($"[ActionMapper] Point -> Selected: {_interactables[_selectedIndex].objectName}");
         }
 
-        private void TogglePinchAction()
+        private void ToggleFistMove()
         {
             if (_selectedIndex < 0 || _selectedIndex >= _interactables.Count) return;
             var obj = _interactables[_selectedIndex];
 
             if (!_isPickedUp)
             {
-                // First pinch — pick up
+                // First Fist — Pick up object to move it
                 obj.OnPickUp();
                 _isPickedUp = true;
-                UpdateStatusBar($"Holding: {obj.objectName}  |  Pinch to place  |  Fist to cancel");
-                ShowHintUI($"Ghost shows destination. Pinch again to place, or Fist to cancel.", false);
-                Debug.Log($"[ActionMapper] Pinch -> Picked up: {obj.objectName}");
+                UpdateStatusBar($"Holding: {obj.objectName}  |  Fist to place at drop zone  |  Pinch to cancel");
+                ShowHintUI($"Ghost shows destination! Fist again to place, or Pinch to cancel.", false);
+                Debug.Log($"[ActionMapper] Fist -> Picked up: {obj.objectName}");
             }
             else
             {
-                // Second pinch — place
+                // Second Fist — Place object at drop zone
                 obj.OnPlace();
                 _isPickedUp = false;
                 _placedCount++;
@@ -191,32 +187,32 @@ namespace Adapter.Learning
 
                 int total = _interactables.Count;
                 UpdateStatusBar($"Placed! {_placedCount}/{total} objects placed. Point to select next.");
-                ShowHintUI($"{obj.objectName} placed successfully!", false);
+                ShowHintUI($"{obj.objectName} moved successfully!", false);
                 _decisionEngine?.Tracker?.AdvanceToNextTask();
 
                 // Auto-deselect
                 _selectedIndex = -1;
-                Debug.Log($"[ActionMapper] Pinch -> Placed: {obj.objectName}");
+                Debug.Log($"[ActionMapper] Fist -> Placed: {obj.objectName}");
 
                 if (_placedCount >= total)
-                    ShowHintUI("All objects placed! Lab complete! Use Fist to reset.", false);
+                    ShowHintUI("All objects placed! Level complete! Pinch to reset.", false);
             }
         }
 
-        private void CancelOrReset()
+        private void ResetOrCancel()
         {
             if (_isPickedUp && _selectedIndex >= 0 && _selectedIndex < _interactables.Count)
             {
-                // Cancel current pick-up
+                // Cancel current holding state
                 _interactables[_selectedIndex].OnReturn();
                 _isPickedUp = false;
-                UpdateStatusBar("Cancelled. Point to select an object.");
-                ShowHintUI("Object returned to its spot.", false);
-                Debug.Log($"[ActionMapper] Fist -> Returned: {_interactables[_selectedIndex].objectName}");
+                UpdateStatusBar("Cancelled hold. Point to select an object.");
+                ShowHintUI("Object returned to original spot.", false);
+                Debug.Log($"[ActionMapper] Pinch -> Cancelled hold: {_interactables[_selectedIndex].objectName}");
             }
             else
             {
-                // Hard reset — return all objects
+                // Full reset — return all objects
                 foreach (var obj in _interactables)
                     obj.OnReset();
                 _selectedIndex = -1;
@@ -225,7 +221,8 @@ namespace Adapter.Learning
                 UpdateScoreCounter();
                 if (infoPanel != null) infoPanel.SetActive(false);
                 UpdateStatusBar("Reset! Point to select an object.");
-                Debug.Log("[ActionMapper] Fist -> Full reset");
+                ShowHintUI("Lab reset complete.", false);
+                Debug.Log("[ActionMapper] Pinch -> Full reset");
             }
         }
 
@@ -239,13 +236,13 @@ namespace Adapter.Learning
             }
         }
 
-        private void Navigate()
+        private void NextLevel()
         {
             _decisionEngine?.Tracker?.AdvanceToNextTask();
             string task = _decisionEngine?.Tracker?.CurrentTask.ToString() ?? "Unknown";
-            UpdateStatusBar($"Task: {task}");
-            ShowHintUI($"Switched to task: {task}", false);
-            Debug.Log($"[ActionMapper] Swipe -> Task: {task}");
+            UpdateStatusBar($"Level / Task: {task}");
+            ShowHintUI($"Switched to next level: {task}", false);
+            Debug.Log($"[ActionMapper] Swipe/Palm -> Next Level: {task}");
         }
 
         // =====================================================
@@ -291,8 +288,8 @@ namespace Adapter.Learning
             string selName = (_selectedIndex >= 0 && _selectedIndex < _interactables.Count)
                 ? _interactables[_selectedIndex].objectName : "None";
             string state   = _isPickedUp
-                ? "<color=yellow>HOLDING — Pinch to place | Fist to cancel</color>"
-                : (_selectedIndex >= 0 ? "<color=#88ff88>SELECTED — Pinch to pick up</color>" : "<color=#aaaaaa>None selected</color>");
+                ? "<color=yellow>MOVING — Fist to place | Pinch to cancel</color>"
+                : (_selectedIndex >= 0 ? "<color=#88ff88>SELECTED — Fist to move</color>" : "<color=#aaaaaa>None selected</color>");
             string task    = _decisionEngine?.Tracker?.CurrentTask.ToString() ?? "ExploreLab";
             int    done    = _decisionEngine?.Tracker?.CompletedTasksCount ?? 0;
             int    total   = _interactables.Count;
@@ -302,15 +299,15 @@ namespace Adapter.Learning
                 $"<color=#88ccff>────────────────────</color>\n" +
                 $"<b>Object:</b> {selName}\n" +
                 $"<b>State:</b> {state}\n\n" +
-                $"<b>Task:</b> {task}\n" +
+                $"<b>Level:</b> {task}\n" +
                 $"<b>Placed:</b> {_placedCount}/{total}\n" +
                 $"<b>Actions:</b> {done}\n\n" +
                 $"<size=13><color=#aaaaaa><b>Controls:</b>\n" +
-                $"• Point  → Select / Cycle\n" +
-                $"• Pinch  → Pick up / Place\n" +
-                $"• Fist   → Cancel / Reset\n" +
-                $"• Palm   → Toggle this panel\n" +
-                $"• Swipe  → Next Task</color></size>";
+                $"• Point  → Select Object\n" +
+                $"• Fist   → Move / Place Object\n" +
+                $"• Pinch  → Reset / Cancel\n" +
+                $"• Palm   → Toggle Panel\n" +
+                $"• Swipe  → Next Level</color></size>";
         }
 
         private void UpdateScoreCounter()

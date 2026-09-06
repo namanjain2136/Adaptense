@@ -1,16 +1,11 @@
 ﻿// ============================================================
-// ADAPTER Project — Phase 6 (fixed)
+// ADAPTER Project — Phase 6
 // LabSceneBuilder.cs
 //
 // Adapter > Build Phase 6 Lab Scene
 //
-// KEY DESIGN:  The Lab scene is loaded additively over the
-// Hand Tracking webcam feed.  Any opaque 3D geometry is
-// rendered by the same camera and will block the webcam.
-// Therefore we use NO opaque large geometry (no floor, no
-// wall, no solid tables).  All spatial cues are provided
-// through transparent/glowing UI-canvas overlays and small
-// coloured object spheres/cylinders.
+// Generates 6 large, vibrant 3D objects (bottom row) and 6 matching
+// drop zones (top row) overlaying the webcam feed seamlessly.
 // ============================================================
 
 using UnityEngine;
@@ -37,29 +32,26 @@ namespace Adapter.EditorScripts
 
             // Remove default camera — Hand Tracking scene provides one
             if (Camera.main != null) GameObject.DestroyImmediate(Camera.main.gameObject);
-            // Remove default directional light to avoid double-lighting
             var defaultLight = GameObject.Find("Directional Light");
             if (defaultLight != null) GameObject.DestroyImmediate(defaultLight);
 
             // ─────────────────────────────────────────────────────
-            // 6 SMALL INTERACTABLE OBJECTS  (source positions)
-            // Spread across the bottom third of screen-space
-            // (small size so they don't block the webcam too much)
+            // 6 LARGE INTERACTABLE OBJECTS (source row, bottom)
             // ─────────────────────────────────────────────────────
-            var defs = new (string name, string shape, Color color, float x, float y, float z)[]
-            {
-                ("Beaker",     "Cylinder", new Color(0.20f, 0.80f, 0.95f), -1.6f, -1.2f,  3.0f),
-                ("Book",       "Cube",     new Color(0.88f, 0.25f, 0.25f), -0.9f, -1.2f,  3.0f),
-                ("Flask",      "Sphere",   new Color(0.25f, 0.85f, 0.40f), -0.2f, -1.2f,  3.0f),
-                ("Battery",    "Cube",     new Color(0.95f, 0.80f, 0.15f),  0.5f, -1.2f,  3.0f),
-                ("Lens",       "Cylinder", new Color(0.75f, 0.35f, 0.95f),  1.2f, -1.2f,  3.0f),
-                ("SampleTube", "Cylinder", new Color(1.0f,  0.55f, 0.15f),  1.9f, -1.2f,  3.0f),
-            };
+            float[] xCoords = new float[] { -2.0f, -1.2f, -0.4f, 0.4f, 1.2f, 2.0f };
+            float objY = -0.9f;
+            float dzY  = 0.75f;
+            float zPos = 2.8f;
 
-            // Drop zone positions (upper row, same x-spread)
-            var dzPositions = new float[] { -1.6f, -0.9f, -0.2f, 0.5f, 1.2f, 1.9f };
-            float dzY = 0.8f;
-            float dzZ = 3.0f;
+            var defs = new (string name, string shape, Color color)[]
+            {
+                ("Beaker",     "Cylinder", new Color(0.20f, 0.80f, 0.95f)),
+                ("Book",       "Cube",     new Color(0.88f, 0.25f, 0.25f)),
+                ("Flask",      "Sphere",   new Color(0.25f, 0.85f, 0.40f)),
+                ("Battery",    "Cube",     new Color(0.95f, 0.80f, 0.15f)),
+                ("Lens",       "Cylinder", new Color(0.75f, 0.35f, 0.95f)),
+                ("SampleTube", "Cylinder", new Color(1.0f,  0.55f, 0.15f)),
+            };
 
             GameObject[] objects   = new GameObject[defs.Length];
             GameObject[] dropZones = new GameObject[defs.Length];
@@ -67,18 +59,21 @@ namespace Adapter.EditorScripts
             for (int i = 0; i < defs.Length; i++)
             {
                 var d = defs[i];
-                Vector3 objScale = ObjectScale(d.shape);
+                float x = xCoords[i];
+
+                // --- Large source object ---
+                Vector3 objScale = LargeObjectScale(d.shape);
                 var obj = MakePrimitive(d.name, d.shape,
-                    new Vector3(d.x, d.y, d.z), objScale, d.color);
+                    new Vector3(x, objY, zPos), objScale, d.color);
                 var interactable = obj.AddComponent<InteractableObject>();
                 interactable.objectName = d.name;
                 objects[i] = obj;
 
-                // Drop zone — flat cylinder marker above the objects row
+                // --- Large drop zone (flat cylinder marker) ---
                 var dz = MakePrimitive($"DropZone_{d.name}", "Cylinder",
-                    new Vector3(dzPositions[i], dzY, dzZ),
-                    new Vector3(0.22f, 0.015f, 0.22f),
-                    new Color(0.2f, 0.9f, 1f, 0.3f));
+                    new Vector3(x, dzY, zPos),
+                    new Vector3(0.48f, 0.025f, 0.48f),
+                    new Color(0.2f, 0.9f, 1f, 0.35f));
                 var dropZone = dz.AddComponent<DropZone>();
                 dropZone.zoneName = d.name;
                 dropZone.assignedObject = interactable;
@@ -100,11 +95,9 @@ namespace Adapter.EditorScripts
 
             Font font = Resources.GetBuiltinResource<Font>("Arial.ttf");
 
-            // Row labels above drop zones (canvas overlay — not 3D text)
-            BuildZoneLabels(canvasObj.transform, font, defs);
-
-            // Row labels below objects
-            BuildObjectLabels(canvasObj.transform, font, defs);
+            // Row headers
+            BuildZoneLabels(canvasObj.transform, font);
+            BuildObjectLabels(canvasObj.transform, font);
 
             // Score counter — top-left
             var scoreGo   = BuildScoreCounter(canvasObj.transform, font);
@@ -115,18 +108,16 @@ namespace Adapter.EditorScripts
             // Info panel  — right edge (starts HIDDEN)
             var infoPanelGo = BuildInfoPanel(canvasObj.transform, font);
 
-            // Divider line — thin horizontal bar to visually separate rows
+            // Divider line
             BuildDividerLine(canvasObj.transform);
 
             // ─────────────────────────────────────────────────────
             // GESTURE CONTROLLER
             // ─────────────────────────────────────────────────────
-            var controllerObj  = new GameObject("HandGestureController");
-            var controller     = controllerObj.AddComponent<GestureController>();
+            var controllerObj = new GameObject("HandGestureController");
+            var controller    = controllerObj.AddComponent<GestureController>();
             controller.infoPanel = infoPanelGo;
 
-            // Pre-add the ActionMapper so GestureController.EnsureInitialized
-            // finds it via GetComponent instead of creating a second one
             var actionMapper = controllerObj.AddComponent<GestureActionMapper>();
             actionMapper.infoPanel     = infoPanelGo;
             actionMapper.hintBanner    = hintGo;
@@ -149,7 +140,7 @@ namespace Adapter.EditorScripts
                 EditorBuildSettings.scenes = updated;
             }
 
-            Debug.Log("[Adaptense] Phase 6 Lab Scene (no-block) built at " + scenePath);
+            Debug.Log("[Adaptense] Phase 6 Lab Scene built at " + scenePath);
         }
 
         // =====================================================
@@ -171,35 +162,31 @@ namespace Adapter.EditorScripts
             return go;
         }
 
-        private static Vector3 ObjectScale(string shape)
+        private static Vector3 LargeObjectScale(string shape)
         {
-            return shape == "Cylinder" ? new Vector3(0.14f, 0.18f, 0.14f)
-                 : shape == "Sphere"   ? new Vector3(0.18f, 0.18f, 0.18f)
-                                       : new Vector3(0.20f, 0.10f, 0.28f);
+            return shape == "Cylinder" ? new Vector3(0.35f, 0.45f, 0.35f)
+                 : shape == "Sphere"   ? new Vector3(0.42f, 0.42f, 0.42f)
+                                       : new Vector3(0.45f, 0.25f, 0.55f);
         }
 
         // ---- UI builders ----
 
-        private static void BuildZoneLabels(Transform canvas, Font font,
-            (string name, string shape, Color color, float x, float y, float z)[] defs)
+        private static void BuildZoneLabels(Transform canvas, Font font)
         {
-            // "PLACE HERE ▼" header above the drop zone row
-            var header = MakeLabel(canvas, "DropZoneHeader",
-                "▼  PLACE HERE  ▼",
-                new Vector2(0, 0.75f), new Vector2(0.5f, 1f),
-                new Vector2(0, 68f), new Vector2(640f, 38f),
-                14, new Color(0.3f, 0.9f, 1f), font);
+            MakeLabel(canvas, "DropZoneHeader",
+                "▼  PLACE HERE (DROP ZONES)  ▼",
+                new Vector2(0.5f, 0.78f), new Vector2(0.5f, 0.78f),
+                new Vector2(0, 0), new Vector2(520f, 36f),
+                15, new Color(0.3f, 0.9f, 1f), font);
         }
 
-        private static void BuildObjectLabels(Transform canvas, Font font,
-            (string name, string shape, Color color, float x, float y, float z)[] defs)
+        private static void BuildObjectLabels(Transform canvas, Font font)
         {
-            // "PICK UP ▲" footer below the objects row
-            var footer = MakeLabel(canvas, "ObjectRowHeader",
-                "▲  PICK UP  ▲",
-                new Vector2(0, 0.2f), new Vector2(0.5f, 0f),
-                new Vector2(0, -30f), new Vector2(500f, 34f),
-                14, new Color(0.9f, 0.9f, 0.5f), font);
+            MakeLabel(canvas, "ObjectRowHeader",
+                "▲  PICK UP OBJECTS  ▲",
+                new Vector2(0.5f, 0.18f), new Vector2(0.5f, 0.18f),
+                new Vector2(0, 0), new Vector2(440f, 34f),
+                15, new Color(0.95f, 0.85f, 0.3f), font);
         }
 
         private static void BuildDividerLine(Transform canvas)
@@ -224,7 +211,7 @@ namespace Adapter.EditorScripts
             var go = new GameObject(objName);
             go.transform.SetParent(canvas, false);
             var img  = go.AddComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0.45f);
+            img.color = new Color(0f, 0f, 0f, 0.55f);
             var r    = go.GetComponent<RectTransform>();
             r.anchorMin        = anchorMin;
             r.anchorMax        = anchorMax;
@@ -283,7 +270,7 @@ namespace Adapter.EditorScripts
             r.anchorMax = new Vector2(0.5f, 1f);
             r.pivot     = new Vector2(0.5f, 1f);
             r.anchoredPosition = new Vector2(0f, -16f);
-            r.sizeDelta = new Vector2(620f, 46f);
+            r.sizeDelta = new Vector2(660f, 46f);
 
             var tGo = new GameObject("StatusText");
             tGo.transform.SetParent(go.transform, false);
@@ -291,7 +278,7 @@ namespace Adapter.EditorScripts
             t.font = font; t.fontSize = 16;
             t.alignment = TextAnchor.MiddleCenter;
             t.color = new Color(0.85f, 0.95f, 1f);
-            t.text  = "Point to select an object";
+            t.text  = "Point to select an object  |  Fist to move  |  Pinch to reset";
             var tr  = tGo.GetComponent<RectTransform>();
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = new Vector2(12, 4); tr.offsetMax = new Vector2(-12, -4);
