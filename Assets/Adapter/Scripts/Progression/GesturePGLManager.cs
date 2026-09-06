@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // ADAPTER Project — Phase 6 (PGL Level Rearrangement & Description Modal)
 // GesturePGLManager.cs
 //
@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Adapter.Gesture;
+using Adapter.UserProfile; // Phase 7 (PIP) — profile restore & save
 
 namespace Adapter.Progression
 {
@@ -66,6 +67,41 @@ namespace Adapter.Progression
 
         private void Start()
         {
+            // ── Phase 7 (PIP): Restore saved level & task progress ─────────
+            if (ProfileManager.Instance != null)
+            {
+                Adapter.UserProfile.UserProfile profile = ProfileManager.Instance.ActiveProfile;
+
+                // Clamp to valid enum range (1–5) in case of corrupted data
+                int savedLevel = Mathf.Clamp(profile.currentLevel, 1, 5);
+                currentLevel = (GestureLevel)savedLevel;
+
+                // Restore Level 1 task flags
+                _level1OpenedPanel       = profile.level1OpenedPanel;
+                _level1OpenedDescription = profile.level1OpenedDescription;
+
+                // Restore Level 2 task state.
+                // HashSet is not JsonUtility-serializable, so we stored the count.
+                // Pre-fill with dummy keys equal to the saved count so Count >= 2 works.
+                _level2SelectedObjects = new HashSet<string>();
+                for (int i = 0; i < profile.level2SelectedObjectCount; i++)
+                    _level2SelectedObjects.Add($"restored_obj_{i}");
+                _level2Swiped = profile.level2Swiped;
+
+                // Restore Level 3 & 4 task flags
+                _level3Resetted = profile.level3Resetted;
+                _level4Grabbed  = profile.level4Grabbed;
+
+                Debug.Log($"[PGL] Restored from profile: Level={savedLevel}, " +
+                          $"L1Panel={_level1OpenedPanel}, L1Desc={_level1OpenedDescription}, " +
+                          $"L2Objs={_level2SelectedObjects.Count}, L2Swiped={_level2Swiped}, " +
+                          $"L3Reset={_level3Resetted}, L4Grab={_level4Grabbed}");
+            }
+            else
+            {
+                Debug.LogWarning("[PGL] ProfileManager not found — starting fresh at Level 1.");
+            }
+
             ShowLevelDescriptionModal(currentLevel, 4f);
             UpdateUI();
             Debug.Log($"[PGL] Initialized Progressive Gesture Learning at Level {(int)currentLevel} ({currentLevel})");
@@ -214,6 +250,7 @@ namespace Adapter.Progression
             }
 
             UpdateUI();
+            SyncToProfile(); // Phase 7 (PIP) — persist task progress after every state change
         }
 
         /// <summary>
@@ -231,6 +268,58 @@ namespace Adapter.Progression
             ShowLevelUpToast();
             ShowLevelDescriptionModal(currentLevel, 4f);
             UpdateUI();
+            SyncToProfile(); // Phase 7 (PIP) — persist new level immediately
+        }
+
+        /// <summary>
+        /// Resets PGL back to Level 1 and clears all in-memory task progress.
+        /// Called by ProfileManager when the user holds R for 2 seconds (demo reset).
+        /// </summary>
+        public void ResetToLevel1()
+        {
+            StopAllCoroutines();
+            _isTransitioning = false;
+
+            currentLevel = GestureLevel.Level1_PalmsOnly;
+
+            // Clear all level task flags
+            _level1OpenedPanel       = false;
+            _level1OpenedDescription = false;
+            _level2SelectedObjects   = new HashSet<string>();
+            _level2Swiped            = false;
+            _level3Resetted          = false;
+            _level4Grabbed           = false;
+
+            UpdateUI();
+            ShowLevelDescriptionModal(currentLevel, 4f);
+            Debug.Log("[PGL] ResetToLevel1: In-memory PGL state cleared. Starting from Level 1.");
+        }
+
+
+        // =====================================================
+        // Phase 7 (PIP) — Profile Sync
+        // =====================================================
+
+        /// <summary>
+        /// Writes all current in-memory PGL state into the active UserProfile
+        /// and immediately saves it to disk. Called after every task-progress
+        /// change and every level advance so nothing is lost on app close.
+        /// </summary>
+        private void SyncToProfile()
+        {
+            if (ProfileManager.Instance == null) return;
+
+            Adapter.UserProfile.UserProfile p = ProfileManager.Instance.ActiveProfile;
+
+            p.currentLevel              = (int)currentLevel;
+            p.level1OpenedPanel         = _level1OpenedPanel;
+            p.level1OpenedDescription   = _level1OpenedDescription;
+            p.level2SelectedObjectCount = _level2SelectedObjects.Count;
+            p.level2Swiped              = _level2Swiped;
+            p.level3Resetted            = _level3Resetted;
+            p.level4Grabbed             = _level4Grabbed;
+
+            ProfileManager.Instance.SaveActiveProfile();
         }
 
         // =====================================================

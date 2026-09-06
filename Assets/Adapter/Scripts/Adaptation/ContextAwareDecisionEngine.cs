@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // ADAPTER Project — Phase 5
 // ContextAwareDecisionEngine.cs
 //
@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Adapter.Gesture;
 using Adapter.Context;
+using Adapter.UserProfile; // Phase 7 (PIP) — profile-driven sensitivity
 
 namespace Adapter.Adaptation
 {
@@ -62,6 +63,28 @@ namespace Adapter.Adaptation
                     _contextTracker = gameObject.AddComponent<ContextTracker>();
                 }
             }
+
+            // ── Phase 7 (PIP): Load per-user gesture sensitivity from profile ──
+            // gestureSensitivity is 0–1. We map it to the 0.4–0.9 threshold range
+            // so that the default value of 0.5 produces exactly 0.65 — the same
+            // as the previous hardcoded value — preserving existing behaviour.
+            // Formula: threshold = Lerp(0.4, 0.9, sensitivity)
+            //   sensitivity=0.0 → threshold=0.40  (very forgiving)
+            //   sensitivity=0.5 → threshold=0.65  (default, unchanged)
+            //   sensitivity=1.0 → threshold=0.90  (very strict)
+            if (ProfileManager.Instance != null)
+            {
+                float s = ProfileManager.Instance.ActiveProfile.gestureSensitivity;
+                _baseConfidenceThreshold = Mathf.Lerp(0.4f, 0.9f, s);
+                Debug.Log($"[CADE] Loaded gestureSensitivity={s:F2} from profile → _baseConfidenceThreshold={_baseConfidenceThreshold:F2}");
+            }
+            else
+            {
+                Debug.LogWarning("[CADE] ProfileManager not found — using Inspector default _baseConfidenceThreshold=" + _baseConfidenceThreshold);
+            }
+            // NOTE: CADE does NOT dynamically change _baseConfidenceThreshold at runtime —
+            // it only widens to _relaxedConfidenceThreshold as a temporary floor.
+            // Therefore no SaveProfile() call is needed here — Step 3 is read-only.
         }
 
         /// <summary>
@@ -130,7 +153,7 @@ namespace Adapter.Adaptation
             }
 
             // ── Factor 2: Repeated Failure Recovery (Widen tolerance) ────────
-            if (context.FailedAttemptsForGesture >= 2)
+            if (context.FailedAttemptsForGesture >= _hintFailureThreshold)
             {
                 targetThreshold = Mathf.Min(targetThreshold, _relaxedConfidenceThreshold);
             }

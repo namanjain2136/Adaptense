@@ -1,4 +1,4 @@
-﻿import docx
+import docx
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -70,7 +70,7 @@ def create_report():
     meta_table.autofit = False
     
     meta_data = [
-        [("Project Version", "Adaptense v1.0 (Phases 1 - 6 Completed)"), ("Engine & Target", "Unity 2021.3.22f1 LTS (Windows x64)")],
+        [("Project Version", "Adaptense v1.0 (Phases 1 - 7 Completed)"), ("Engine & Target", "Unity 2021.3.22f1 LTS (Windows x64)")],
         [("Tracking Framework", "Google MediaPipe Unity Plugin v0.11.0"), ("Repository", "github.com/namanjain2136/Adaptense")]
     ]
 
@@ -139,7 +139,8 @@ def create_report():
         "Adaptense is an intelligent, vision-based Human-Computer Interaction (HCI) and virtual learning environment "
         "built inside Unity 2021.3 LTS, leveraging Google MediaPipe for real-time webcam hand tracking. "
         "Unlike conventional static gesture interfaces that rigidly expect perfect user mechanics, Adaptense incorporates "
-        "two major scientific novelties: (1) an adaptive, multi-modal Context-Aware Decision Engine, and (2) Progressive Gesture Learning (PGL)."
+        "three major scientific novelties: (1) an adaptive, multi-modal Context-Aware Decision Engine (CADE), (2) Progressive Gesture Learning (PGL), "
+        "and (3) Persistent Identity Profile (PIP) for cross-session learner progress and sensitivity persistence."
     )
     p.paragraph_format.space_after = Pt(6)
 
@@ -148,6 +149,7 @@ def create_report():
         ("Touchless Interactive Virtual Lab", "Provide an immersive laboratory where users interact with 3D scientific apparatus solely via natural hand gestures captured by standard commodity webcams."),
         ("Adaptive Tolerance (Novelty 1)", "Dynamically relax gesture thresholds during sub-optimal environmental conditions (poor lighting, distance variations) and user frustration/fatigue."),
         ("Progressive Gesture Learning - PGL (Novelty 2)", "Structure gesture acquisition into 5 progressive levels, gating complex actions until fundamental gestures and navigation tasks are mastered."),
+        ("Persistent Identity Profile - PIP (Novelty 3)", "Maintain learner profile state (unlocked levels, gesture sensitivity tolerance, task completion counters, session statistics) across app restarts using lightweight JSON persistence."),
         ("Low Latency & High Frame Rates", "Maintain a continuous 60+ FPS processing loop with sub-30ms recognition latency across 21 3D hand landmarks."),
         ("Zero Specialized Hardware", "Require no gloves, depth sensors, or external trackers, making advanced gesture learning universally accessible.")
     ]
@@ -289,6 +291,20 @@ def create_report():
             p = cell.paragraphs[0]
             r = p.add_run(text)
             r.font.size = Pt(9.5)
+
+    doc.add_paragraph().paragraph_format.space_after = Pt(10)
+
+    add_heading_2("Novelty 3: Persistent Identity Profile (PIP)")
+    doc.add_paragraph(
+        "Standard vision-based learning environments reset user state upon application closure, requiring learners to re-learn gesture controls and repeat introductory progression levels every session. "
+        "The Persistent Identity Profile (PIP) subsystem introduces persistent data management designed specifically for gesture-driven HCI:"
+    )
+    doc.add_paragraph(
+        "• Cross-Session Level & Task Persistence: Automatically restores the learner's active PGL level (1-5) and per-level task progress flags upon app launch.\n"
+        "• Learner-Specific Sensitivity Tolerance: Persists personalized gesture sensitivity values (0.0 - 1.0) and maps them to CADE confidence threshold bounds (0.40 - 0.90).\n"
+        "• Lightweight Non-Blocking Storage: Utilizes native JsonUtility serialization to write JSON user profiles to Application.persistentDataPath without external package dependencies.\n"
+        "• Immediate Reset Capability: Includes a fail-safe demo reset mechanism (2-second holding shortcut) to instantaneously purge saved JSON state and revert to Level 1 in memory."
+    )
 
     doc.add_paragraph().paragraph_format.space_after = Pt(10)
 
