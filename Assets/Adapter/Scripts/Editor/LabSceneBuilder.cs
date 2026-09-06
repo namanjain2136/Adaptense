@@ -1,11 +1,14 @@
 ﻿// ============================================================
-// ADAPTER Project — Phase 6
+// ADAPTER Project — Phase 6 (UI Polish & Object Scale Fix)
 // LabSceneBuilder.cs
 //
 // Adapter > Build Phase 6 Lab Scene
 //
-// Generates 6 large, vibrant 3D objects (bottom row) and 6 matching
-// drop zones (top row) overlaying the webcam feed seamlessly.
+// Fixes:
+//  1. Positioned objects closer to camera (Z=1.4) & scaled 4x larger
+//     so they are big, clear 3D items on screen instead of tiny dots.
+//  2. Fixed "PLACE HERE" UI text overlap under top status bar.
+//  3. Polished UI canvas styling & spacing.
 // ============================================================
 
 using UnityEngine;
@@ -36,12 +39,13 @@ namespace Adapter.EditorScripts
             if (defaultLight != null) GameObject.DestroyImmediate(defaultLight);
 
             // ─────────────────────────────────────────────────────
-            // 6 LARGE INTERACTABLE OBJECTS (source row, bottom)
+            // 6 LARGE INTERACTABLE OBJECTS (closer to camera Z=1.4)
             // ─────────────────────────────────────────────────────
-            float[] xCoords = new float[] { -2.0f, -1.2f, -0.4f, 0.4f, 1.2f, 2.0f };
-            float objY = -0.9f;
-            float dzY  = 0.75f;
-            float zPos = 2.8f;
+            // X coordinates spread across screen width at Z=1.4
+            float[] xCoords = new float[] { -1.35f, -0.81f, -0.27f, 0.27f, 0.81f, 1.35f };
+            float objY = -0.55f;
+            float dzY  = 0.45f;
+            float zPos = 1.4f;
 
             var defs = new (string name, string shape, Color color)[]
             {
@@ -61,19 +65,19 @@ namespace Adapter.EditorScripts
                 var d = defs[i];
                 float x = xCoords[i];
 
-                // --- Large source object ---
-                Vector3 objScale = LargeObjectScale(d.shape);
+                // --- Very prominent source object ---
+                Vector3 objScale = ProminentObjectScale(d.shape);
                 var obj = MakePrimitive(d.name, d.shape,
                     new Vector3(x, objY, zPos), objScale, d.color);
                 var interactable = obj.AddComponent<InteractableObject>();
                 interactable.objectName = d.name;
                 objects[i] = obj;
 
-                // --- Large drop zone (flat cylinder marker) ---
+                // --- Drop zone (prominent target marker) ---
                 var dz = MakePrimitive($"DropZone_{d.name}", "Cylinder",
                     new Vector3(x, dzY, zPos),
-                    new Vector3(0.48f, 0.025f, 0.48f),
-                    new Color(0.2f, 0.9f, 1f, 0.35f));
+                    new Vector3(0.38f, 0.02f, 0.38f),
+                    new Color(0.2f, 0.9f, 1f, 0.38f));
                 var dropZone = dz.AddComponent<DropZone>();
                 dropZone.zoneName = d.name;
                 dropZone.assignedObject = interactable;
@@ -95,7 +99,7 @@ namespace Adapter.EditorScripts
 
             Font font = Resources.GetBuiltinResource<Font>("Arial.ttf");
 
-            // Row headers
+            // Row headers (placed cleanly without cut-offs)
             BuildZoneLabels(canvasObj.transform, font);
             BuildObjectLabels(canvasObj.transform, font);
 
@@ -140,7 +144,7 @@ namespace Adapter.EditorScripts
                 EditorBuildSettings.scenes = updated;
             }
 
-            Debug.Log("[Adaptense] Phase 6 Lab Scene built at " + scenePath);
+            Debug.Log("[Adaptense] Phase 6 Lab Scene (Prominent UI & Objects) built at " + scenePath);
         }
 
         // =====================================================
@@ -162,31 +166,34 @@ namespace Adapter.EditorScripts
             return go;
         }
 
-        private static Vector3 LargeObjectScale(string shape)
+        private static Vector3 ProminentObjectScale(string shape)
         {
-            return shape == "Cylinder" ? new Vector3(0.35f, 0.45f, 0.35f)
-                 : shape == "Sphere"   ? new Vector3(0.42f, 0.42f, 0.42f)
-                                       : new Vector3(0.45f, 0.25f, 0.55f);
+            // Significantly larger so items are easily visible at Z=1.4
+            return shape == "Cylinder" ? new Vector3(0.28f, 0.38f, 0.28f)
+                 : shape == "Sphere"   ? new Vector3(0.35f, 0.35f, 0.35f)
+                                       : new Vector3(0.36f, 0.22f, 0.44f);
         }
 
         // ---- UI builders ----
 
         private static void BuildZoneLabels(Transform canvas, Font font)
         {
+            // Positioned cleanly below the status bar (y = -72px from top)
             MakeLabel(canvas, "DropZoneHeader",
-                "▼  PLACE HERE (DROP ZONES)  ▼",
-                new Vector2(0.5f, 0.78f), new Vector2(0.5f, 0.78f),
-                new Vector2(0, 0), new Vector2(520f, 36f),
-                15, new Color(0.3f, 0.9f, 1f), font);
+                "▼  DESTINATION DROP ZONES  ▼",
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(0, -78f), new Vector2(460f, 32f),
+                14, new Color(0.35f, 0.92f, 1f), font);
         }
 
         private static void BuildObjectLabels(Transform canvas, Font font)
         {
+            // Positioned cleanly near bottom above camera controls (y = 82px from bottom)
             MakeLabel(canvas, "ObjectRowHeader",
-                "▲  PICK UP OBJECTS  ▲",
-                new Vector2(0.5f, 0.18f), new Vector2(0.5f, 0.18f),
-                new Vector2(0, 0), new Vector2(440f, 34f),
-                15, new Color(0.95f, 0.85f, 0.3f), font);
+                "▲  SOURCE OBJECTS (POINT TO SELECT)  ▲",
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(0, 82f), new Vector2(480f, 32f),
+                14, new Color(0.98f, 0.88f, 0.35f), font);
         }
 
         private static void BuildDividerLine(Transform canvas)
@@ -194,10 +201,10 @@ namespace Adapter.EditorScripts
             var go = new GameObject("Divider");
             go.transform.SetParent(canvas, false);
             var img = go.AddComponent<Image>();
-            img.color = new Color(0.5f, 0.8f, 1f, 0.25f);
+            img.color = new Color(0.5f, 0.8f, 1f, 0.22f);
             var r = go.GetComponent<RectTransform>();
-            r.anchorMin        = new Vector2(0.1f, 0.5f);
-            r.anchorMax        = new Vector2(0.9f, 0.5f);
+            r.anchorMin        = new Vector2(0.08f, 0.48f);
+            r.anchorMax        = new Vector2(0.92f, 0.48f);
             r.pivot            = new Vector2(0.5f, 0.5f);
             r.anchoredPosition = new Vector2(0, 0);
             r.sizeDelta        = new Vector2(0, 2f);
@@ -211,7 +218,7 @@ namespace Adapter.EditorScripts
             var go = new GameObject(objName);
             go.transform.SetParent(canvas, false);
             var img  = go.AddComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0.55f);
+            img.color = new Color(0.04f, 0.07f, 0.13f, 0.85f);
             var r    = go.GetComponent<RectTransform>();
             r.anchorMin        = anchorMin;
             r.anchorMax        = anchorMax;
@@ -240,23 +247,23 @@ namespace Adapter.EditorScripts
         {
             var go = new GameObject("ScoreCounter");
             go.transform.SetParent(canvas, false);
-            go.AddComponent<Image>().color = new Color(0.04f, 0.07f, 0.13f, 0.88f);
+            go.AddComponent<Image>().color = new Color(0.04f, 0.07f, 0.13f, 0.90f);
             var r = go.GetComponent<RectTransform>();
             r.anchorMin = new Vector2(0f, 1f);
             r.anchorMax = new Vector2(0f, 1f);
             r.pivot     = new Vector2(0f, 1f);
             r.anchoredPosition = new Vector2(16f, -16f);
-            r.sizeDelta = new Vector2(180f, 50f);
+            r.sizeDelta = new Vector2(170f, 44f);
 
             var tGo = new GameObject("ScoreText");
             tGo.transform.SetParent(go.transform, false);
             var t   = tGo.AddComponent<Text>();
-            t.font      = font; t.fontSize = 20; t.fontStyle = FontStyle.Bold;
+            t.font      = font; t.fontSize = 18; t.fontStyle = FontStyle.Bold;
             t.alignment = TextAnchor.MiddleCenter; t.color = Color.white;
             t.text      = "Placed: 0 / 6";
             var tr  = tGo.GetComponent<RectTransform>();
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(8, 5); tr.offsetMax = new Vector2(-8, -5);
+            tr.offsetMin = new Vector2(6, 4); tr.offsetMax = new Vector2(-6, -4);
             return go;
         }
 
@@ -264,13 +271,13 @@ namespace Adapter.EditorScripts
         {
             var go = new GameObject("StatusBar");
             go.transform.SetParent(canvas, false);
-            go.AddComponent<Image>().color = new Color(0.04f, 0.06f, 0.11f, 0.88f);
+            go.AddComponent<Image>().color = new Color(0.04f, 0.06f, 0.11f, 0.92f);
             var r = go.GetComponent<RectTransform>();
             r.anchorMin = new Vector2(0.5f, 1f);
             r.anchorMax = new Vector2(0.5f, 1f);
             r.pivot     = new Vector2(0.5f, 1f);
             r.anchoredPosition = new Vector2(0f, -16f);
-            r.sizeDelta = new Vector2(660f, 46f);
+            r.sizeDelta = new Vector2(640f, 44f);
 
             var tGo = new GameObject("StatusText");
             tGo.transform.SetParent(go.transform, false);
@@ -281,7 +288,7 @@ namespace Adapter.EditorScripts
             t.text  = "Point to select an object  |  Fist to move  |  Pinch to reset";
             var tr  = tGo.GetComponent<RectTransform>();
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(12, 4); tr.offsetMax = new Vector2(-12, -4);
+            tr.offsetMin = new Vector2(10, 4); tr.offsetMax = new Vector2(-10, -4);
             return go;
         }
 
@@ -295,7 +302,7 @@ namespace Adapter.EditorScripts
             r.anchorMax = new Vector2(0.5f, 0f);
             r.pivot     = new Vector2(0.5f, 0f);
             r.anchoredPosition = new Vector2(0f, 26f);
-            r.sizeDelta = new Vector2(660f, 52f);
+            r.sizeDelta = new Vector2(660f, 50f);
 
             var tGo = new GameObject("HintText");
             tGo.transform.SetParent(go.transform, false);
@@ -306,7 +313,7 @@ namespace Adapter.EditorScripts
             t.text  = "Hint will appear here.";
             var tr  = tGo.GetComponent<RectTransform>();
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(12, 5); tr.offsetMax = new Vector2(-12, -5);
+            tr.offsetMin = new Vector2(12, 4); tr.offsetMax = new Vector2(-12, -4);
 
             go.SetActive(false);
             return go;
