@@ -445,10 +445,9 @@ def create_report():
     add_heading_1("8. Future Work & Research Roadmap")
 
     future_items = [
-        ("Phase 7: Progressive Profile Persistence (PIP)", "Serialize user level progression, adaptation statistics, and custom gesture calibrations into persistent JSON / PlayerPrefs profile storage."),
         ("Multi-Hand Bi-Manual Manipulation", "Enable collaborative two-hand interactions such as pouring liquid between beakers or two-handed rotational alignment."),
         ("Physics-Based Rigid Body Interactions", "Integrate Unity PhysX colliders and spring joints for tactile object collisions, gravity, and fluid dynamics."),
-        ("Standalone Build & WebGL / OpenXR Export", "Compile standalone executable (.exe) and investigate WebAssembly / OpenXR deployment for spatial headsets (Apple Vision Pro, Meta Quest 3).")
+        ("Spatial Headset Export (OpenXR)", "Compile standalone WebGL / OpenXR builds for spatial computing devices (Meta Quest 3, Apple Vision Pro).")
     ]
 
     for title, desc in future_items:
@@ -458,9 +457,68 @@ def create_report():
         r1.bold = True
         r2 = bp.add_run(desc)
 
+    doc.add_paragraph().paragraph_format.space_after = Pt(10)
+
+    # ─────────────────────────────────────────────────────────────
+    # SECTION 9: LIVE DEMONSTRATION SCRIPT & VIVA PRESENTATION GUIDE
+    # ─────────────────────────────────────────────────────────────
+    add_heading_1("9. Live Demonstration Script & Viva Presentation Guide")
+
+    doc.add_paragraph(
+        "This step-by-step walkthrough outlines how to deliver a flawless live demonstration during project defense/viva. "
+        "It highlights each core feature, novelty, visual UI reaction, and exact Unity Console log output."
+    )
+
+    demo_steps = [
+        ("Pre-Demo Setup",
+         "1. Open Hand Tracking.unity in Unity 2021.3.22f1.\n"
+         "2. Ensure the Console window is visible alongside the Game view.\n"
+         "3. If starting fresh, hold the 'R' key for 2 seconds in Play mode to reset the profile to Level 1. Look for Console log: [PIP ProfileManager] Profile RESET to default."),
+
+        ("Demonstrating Novelty 2: Progressive Gesture Learning (PGL)",
+         "1. Level 1 (Palms Only):\n"
+         "   • Perform Single Open Palm: Info Panel toggles open. Console log: [PGL Task Progress] Single Palm: Opened Info Panel.\n"
+         "   • Perform Double Open Palm (within 1.4s): Level Description Modal toggles. Console log: [PGL Task Progress] Double Palm: Opened Description Modal.\n"
+         "   • Watch the 4-second transition countdown modal appear, followed by toast notification: [PGL LEVEL UP!] Advanced to Level 2.\n"
+         "2. Demonstrating Gesture Gating (Level 2):\n"
+         "   • Perform a locked gesture (e.g., Fist or Pinch). Point out Console log: [PGL Gating] Gesture 'Fist' is LOCKED at Level 2... showing gestures are safely filtered upstream.\n"
+         "3. Level 2 (Select & Navigate):\n"
+         "   • Point finger at 2 distinct 3D objects (Beaker, Book). Watch cyan outline & floating label appear.\n"
+         "   • Swipe hand horizontally across camera (velocity >= 0.45 u/s) to cycle selection. Level-up to Level 3 triggers.\n"
+         "4. Level 3 & Level 4 (Control & Fist Move):\n"
+         "   • Level 3: Pinch index & thumb tips together to reset/cancel hold → Advances to Level 4.\n"
+         "   • Level 4: Point to select → Make a Fist to pick up object (floats/elevates) → Make 2nd Fist over Drop Zone to place object → Advances to Level 5 (Mastery Mode 🎉)."),
+
+        ("Demonstrating Novelty 1: Context-Aware Decision Engine (CADE)",
+         "1. Normal Execution:\n"
+         "   • Perform gesture cleanly in good light. Point out Console: ExecuteNormally.\n"
+         "2. Adaptive Tolerance (Make Interaction Easier):\n"
+         "   • Cover room light slightly or step back from camera. CADE detects environmental difficulty or struggle and relaxes confidence threshold from 0.65 to 0.42. Console log: [DecisionEngine] MakeInteractionEasier => Lowered tolerance to 0.42...\n"
+         "3. Visual Guidance Hints:\n"
+         "   • Hold an incomplete or ambiguous pose. A cyan hint banner appears at the bottom: 'Extend index finger fully...' or 'Move hand closer to camera'.\n"
+         "4. Alternative Gesture Fallback:\n"
+         "   • Intentionally fail a gesture 4 consecutive times. CADE offers a yellow fallback prompt: 'Having trouble with Point? Try using Swipe instead!'"),
+
+        ("Demonstrating Novelty 3: Persistent Identity Profile (PIP)",
+         "1. Cross-Session Persistence:\n"
+         "   • While at Level 3 or 4, stop Play mode (exit app).\n"
+         "   • Press Play again. Point out Console log on startup: [PIP ProfileManager] ===== PROFILE LOADED ===== Current Level: 4, Session Count: 2.\n"
+         "   • Show that the PGL level badge, instruction banner, and task checklist restore instantly from adapter_profile.json without restarting from Level 1.\n"
+         "2. Fail-Safe Reset Shortcut:\n"
+         "   • Hold 'R' for 2 seconds. Watch the system immediately purge the save JSON and reset the in-memory level back to Level 1 in real-time.")
+    ]
+
+    for title, script in demo_steps:
+        add_heading_2(title)
+        p_sc = doc.add_paragraph()
+        p_sc.paragraph_format.space_after = Pt(6)
+        r_sc = p_sc.add_run(script)
+        r_sc.font.size = Pt(10)
+
     # Save document
     doc.save("Adaptense_Detailed_Project_Report.docx")
-    print("Successfully generated Adaptense_Detailed_Project_Report.docx")
+    print("Successfully generated Adaptense_Detailed_Project_Report.docx with Section 9 Demo Script")
 
 if __name__ == "__main__":
     create_report()
+

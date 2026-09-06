@@ -107,3 +107,44 @@ The pipeline operates on a decoupled 6-phase event-driven architecture:
 - **Language:** C# (.NET Standard 2.1 / Mono Runtime)
 - **Persistence Storage:** JSON (`adapter_profile.json` in `Application.persistentDataPath`)
 - **Repository:** [github.com/namanjain2136/Adaptense](https://github.com/namanjain2136/Adaptense)
+
+---
+
+## 8. Live Demonstration Script & Viva Presentation Guide
+
+This walkthrough details how to conduct a live demonstration for project defense/viva, showing every feature, novelty, visual reaction, and exact Console log output.
+
+### Step 1: Pre-Demo Setup
+1. Open `Hand Tracking.unity` in Unity 2021.3.22f1.
+2. Keep the **Console window** dock visible alongside the Game view.
+3. Hold **`R` key for 2 seconds** in Play mode if you wish to reset to a clean state. Look for Console log:
+   `[PIP ProfileManager] Profile RESET to default. Level=1, all progress cleared.`
+
+### Step 2: Demonstrating Progressive Gesture Learning (PGL - Novelty 2)
+1. **Level 1 (Palms Only):**
+   - Perform a **Single Open Palm**: Info Panel toggles open. Console log: `[PGL Task Progress] Single Palm: Opened Info Panel`.
+   - Perform a **Double Open Palm** (within 1.4s): Level Description Modal toggles. Console log: `[PGL Task Progress] Double Palm: Opened Description Modal`.
+   - Watch the 4-second inter-level transition timer countdown modal appear, followed by toast notification: `[PGL LEVEL UP!] Advanced to Level 2`.
+2. **Demonstrating Gesture Gating (Level 2):**
+   - Perform a locked gesture (e.g., Fist or Pinch). Point to Console log: `[PGL Gating] Gesture 'Fist' is LOCKED at Level 2...` showing locked gestures are filtered upstream.
+3. **Level 2 (Select & Navigate):**
+   - Point finger at 2 distinct 3D objects (Beaker, Book). Watch cyan outline & floating label appear.
+   - Swipe hand horizontally across camera (velocity $\ge 0.45\text{ u/s}$) to cycle selection. Level-up to Level 3 triggers automatically.
+4. **Level 3 & Level 4 (Control & Fist Move):**
+   - Level 3: Pinch index & thumb tips together to reset/cancel hold $\rightarrow$ Advances to Level 4.
+   - Level 4: Point to select $\rightarrow$ Make a Fist to pick up object (floats/elevates) $\rightarrow$ Make 2nd Fist over Drop Zone to place object $\rightarrow$ Advances to Level 5 (Mastery Mode 🎉).
+
+### Step 3: Demonstrating Context-Aware Decision Engine (CADE - Novelty 1)
+1. **Normal Execution:** Perform gesture cleanly in good light. Point to Console log: `ExecuteNormally`.
+2. **Adaptive Tolerance (Make Interaction Easier):** Step back from camera or dim light. CADE relaxes confidence threshold from 0.65 to 0.42. Console log: `[DecisionEngine] MakeInteractionEasier => Lowered tolerance to 0.42...`.
+3. **Visual Guidance Hints:** Hold an ambiguous or partial pose. A cyan hint banner appears at bottom: *"Extend index finger fully..."* or *"Move hand closer to camera"*.
+4. **Alternative Gesture Fallback:** Intentionally fail a gesture 4 times. CADE offers a yellow fallback prompt: *"Having trouble with Point? Try using Swipe instead!"*.
+
+### Step 4: Demonstrating Persistent Identity Profile (PIP - Novelty 3)
+1. **Cross-Session Persistence:**
+   - While at Level 3 or 4, stop Play mode (exit app).
+   - Press Play again. Point to Console log on startup: `[PIP ProfileManager] ===== PROFILE LOADED ===== Current Level: 4, Session Count: 2`.
+   - Show that the PGL level badge, instruction banner, and task checklist restore instantly from `adapter_profile.json` without restarting from Level 1.
+2. **Fail-Safe Reset Shortcut:**
+   - Hold **`R` key for 2 seconds**. System purges the save JSON and resets the in-memory level back to Level 1 in real-time.
+
