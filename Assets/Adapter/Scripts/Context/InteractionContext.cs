@@ -22,7 +22,11 @@ namespace Adapter.Context
         SelectBeaker,
         GrabApparatus,
         OpenManual,
-        FreeExploration
+        FreeExploration,
+        // Phase 6 tasks
+        TransferObjects,   // Move objects from source to destination table
+        SortByColor,       // Place objects in colour-coded drop zones
+        FreeExplore        // Open sandbox — no specific target
     }
 
     /// <summary>

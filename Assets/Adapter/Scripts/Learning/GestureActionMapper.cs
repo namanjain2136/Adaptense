@@ -1,11 +1,18 @@
-// ============================================================
-// ADAPTER Project — Phase 4 + Phase 5 Integration
+﻿// ============================================================
+// ADAPTER Project — Phase 6
 // GestureActionMapper.cs
 //
 // PURPOSE:
-//   Maps recognized gestures to simple scene actions under the
-//   governance of the Phase 5 ContextAwareDecisionEngine.
-//   Includes side-docked UI formatting and a 2.5s persistent hint banner.
+//   Maps recognized gestures to pick-and-place actions under
+//   the governance of the Phase 5 ContextAwareDecisionEngine.
+//
+//   Gesture flow:
+//     Point      -> Cycle selection (highlight + floating label)
+//     Pinch (1)  -> Pick up selected object
+//     Pinch (2)  -> Place picked-up object at drop zone
+//     Fist       -> Cancel / return object to origin
+//     Open Palm  -> Toggle side info panel
+//     Swipe      -> Advance learning task
 // ============================================================
 
 using System.Collections;
@@ -21,28 +28,29 @@ namespace Adapter.Learning
 {
     public class GestureActionMapper : MonoBehaviour
     {
+        // ---- object list ----
         private List<InteractableObject> _interactables = new List<InteractableObject>();
-        private int _selectedIndex = -1;
-        private bool _isGrabbed = false;
+        private int  _selectedIndex = -1;
+        private bool _isPickedUp    = false;
 
         [Header("UI References")]
-        [Tooltip("Side info panel for object inspection and task state.")]
         public GameObject infoPanel;
-
-        [Tooltip("Optional bottom banner dedicated to visual hints.")]
         public GameObject hintBanner;
 
-        [Header("Decision Engine Reference")]
+        // Injected at runtime for the score counter
+        [HideInInspector] public Text scoreText;
+        [HideInInspector] public Text statusBarText;
+
+        [Header("Decision Engine")]
         [SerializeField] private ContextAwareDecisionEngine _decisionEngine;
 
-        [Header("Pacing & Timing")]
-        [Tooltip("Cooldown between gesture actions (seconds) to prevent rapid triggering.")]
-        public float gestureCooldown = 1.2f;
-        private float _lastGestureTime = 0f;
-
-        [Tooltip("How long a visual hint or adaptation message stays on screen.")]
+        [Header("Timing")]
+        public float gestureCooldown    = 1.2f;
         public float hintDisplayDuration = 2.5f;
+
+        private float     _lastGestureTime    = 0f;
         private Coroutine _activeHintCoroutine;
+        private int       _placedCount         = 0;
 
         public ContextAwareDecisionEngine DecisionEngine
         {
@@ -50,86 +58,29 @@ namespace Adapter.Learning
             set => _decisionEngine = value;
         }
 
+        // =====================================================
+        // Lifecycle
+        // =====================================================
+
         private void Start()
         {
             _interactables = new List<InteractableObject>(FindObjectsOfType<InteractableObject>());
 
             if (_decisionEngine == null)
             {
-                _decisionEngine = GetComponent<ContextAwareDecisionEngine>();
-                if (_decisionEngine == null)
-                {
-                    _decisionEngine = gameObject.AddComponent<ContextAwareDecisionEngine>();
-                }
+                _decisionEngine = GetComponent<ContextAwareDecisionEngine>()
+                                  ?? gameObject.AddComponent<ContextAwareDecisionEngine>();
             }
 
-            // Adjust info panel position to side-docked if not already set
             SetupSideDockedUI();
+            UpdateScoreCounter();
+            UpdateStatusBar("Point to select an object");
         }
 
-        private void SetupSideDockedUI()
-        {
-            if (infoPanel != null)
-            {
-                RectTransform rect = infoPanel.GetComponent<RectTransform>();
-                if (rect != null)
-                {
-                    // Dock to Right Side
-                    rect.anchorMin = new Vector2(1f, 0.5f);
-                    rect.anchorMax = new Vector2(1f, 0.5f);
-                    rect.pivot = new Vector2(1f, 0.5f);
-                    rect.anchoredPosition = new Vector2(-25, 0);
-                    rect.sizeDelta = new Vector2(340, 360);
-                }
+        // =====================================================
+        // Entry point — called by GestureController pipeline
+        // =====================================================
 
-                // If no separate hint banner exists, dynamically create a clean bottom hint banner
-                if (hintBanner == null && infoPanel.transform.parent != null)
-                {
-                    Transform canvasTransform = infoPanel.transform.parent;
-                    Transform existingHint = canvasTransform.Find("HintBanner");
-                    if (existingHint != null)
-                    {
-                        hintBanner = existingHint.gameObject;
-                    }
-                    else
-                    {
-                        GameObject bannerObj = new GameObject("HintBanner");
-                        bannerObj.transform.SetParent(canvasTransform, false);
-                        Image bannerBg = bannerObj.AddComponent<Image>();
-                        bannerBg.color = new Color(0.06f, 0.10f, 0.16f, 0.92f);
-
-                        RectTransform bannerRect = bannerObj.GetComponent<RectTransform>();
-                        bannerRect.anchorMin = new Vector2(0.5f, 0f);
-                        bannerRect.anchorMax = new Vector2(0.5f, 0f);
-                        bannerRect.pivot = new Vector2(0.5f, 0f);
-                        bannerRect.anchoredPosition = new Vector2(0, 30);
-                        bannerRect.sizeDelta = new Vector2(620, 60);
-
-                        GameObject textObj = new GameObject("HintText");
-                        textObj.transform.SetParent(bannerObj.transform, false);
-                        Text text = textObj.AddComponent<Text>();
-                        text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-                        text.fontSize = 17;
-                        text.alignment = TextAnchor.MiddleCenter;
-                        text.color = new Color(0.4f, 0.9f, 1f);
-
-                        RectTransform textRect = textObj.GetComponent<RectTransform>();
-                        textRect.anchorMin = Vector2.zero;
-                        textRect.anchorMax = Vector2.one;
-                        textRect.offsetMin = new Vector2(15, 6);
-                        textRect.offsetMax = new Vector2(-15, -6);
-
-                        bannerObj.SetActive(false);
-                        hintBanner = bannerObj;
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Entry point: receives evaluated gestures from Phase 2, passes them through
-        /// the Phase 5 Decision Engine, and executes actions or shows visual hints.
-        /// </summary>
         public void HandleGestures(List<DetectedGesture> gestures)
         {
             if (Time.time - _lastGestureTime < gestureCooldown) return;
@@ -140,7 +91,6 @@ namespace Adapter.Learning
                 if (_decisionEngine == null) return;
             }
 
-            // Phase 5 Context-Aware Evaluation
             AdaptationResult adaptation = _decisionEngine.ProcessGestures(gestures);
 
             if (adaptation.ShouldExecuteAction)
@@ -149,78 +99,130 @@ namespace Adapter.Learning
                 _decisionEngine.Tracker?.RecordSuccess(adaptation.CandidateGesture);
                 _lastGestureTime = Time.time;
             }
-            else
+            else if (adaptation.Decision == DecisionType.ShowVisualHint
+                  || adaptation.Decision == DecisionType.OfferAlternativeGesture)
             {
-                // Show hint or alternative gesture guidance on UI
-                if (adaptation.Decision == DecisionType.ShowVisualHint || adaptation.Decision == DecisionType.OfferAlternativeGesture)
-                {
-                    ShowHintUI(adaptation.HintMessage, adaptation.Decision == DecisionType.OfferAlternativeGesture);
-                    _decisionEngine.Tracker?.RecordFailure(adaptation.CandidateGesture);
-                    _lastGestureTime = Time.time;
-                }
+                ShowHintUI(adaptation.HintMessage, adaptation.Decision == DecisionType.OfferAlternativeGesture);
+                _decisionEngine.Tracker?.RecordFailure(adaptation.CandidateGesture);
+                _lastGestureTime = Time.time;
             }
         }
+
+        // =====================================================
+        // Core action dispatcher
+        // =====================================================
 
         private void ExecuteAction(GestureType gesture, AdaptationResult adaptation)
         {
             switch (gesture)
             {
-                case GestureType.Point:
-                    SelectNextObject();
-                    break;
-                case GestureType.Pinch:
-                    GrabSelectedObject();
-                    break;
-                case GestureType.OpenPalm:
-                    OpenInfoPanel();
-                    break;
-                case GestureType.Fist:
-                    ResetActions();
-                    break;
-                case GestureType.Swipe:
-                    Navigate();
-                    break;
+                case GestureType.Point:      SelectNextObject();  break;
+                case GestureType.Pinch:      TogglePinchAction(); break;
+                case GestureType.OpenPalm:   OpenInfoPanel();     break;
+                case GestureType.Fist:       CancelOrReset();     break;
+                case GestureType.Swipe:      Navigate();          break;
             }
 
             if (adaptation.Decision == DecisionType.MakeInteractionEasier)
-            {
-                ShowHintUI($"Adaptive mode: Widened tolerance (Threshold {adaptation.AdjustedThreshold:F2})", false);
-            }
+                ShowHintUI($"Adaptive mode: Threshold {adaptation.AdjustedThreshold:F2}", false);
+
+            UpdateSidePanelText();
         }
+
+        // =====================================================
+        // Gesture actions
+        // =====================================================
 
         private void SelectNextObject()
         {
-            if (_interactables.Count == 0)
-            {
-                _interactables = new List<InteractableObject>(FindObjectsOfType<InteractableObject>());
-                if (_interactables.Count == 0) return;
-            }
+            if (_isPickedUp) return; // don't cycle while holding something
 
-            // Unhover previous if not grabbed
-            if (_selectedIndex >= 0 && _selectedIndex < _interactables.Count && !_isGrabbed)
-            {
+            RefreshInteractables();
+            if (_interactables.Count == 0) return;
+
+            // Unhighlight previous
+            if (_selectedIndex >= 0 && _selectedIndex < _interactables.Count)
                 _interactables[_selectedIndex].OnHoverExit();
-            }
 
-            // Only switch selection if we haven't grabbed the current one
-            if (!_isGrabbed)
+            // Skip already-placed objects
+            int tries = 0;
+            do
             {
                 _selectedIndex = (_selectedIndex + 1) % _interactables.Count;
+                tries++;
+            }
+            while (_interactables[_selectedIndex].IsPlaced && tries < _interactables.Count);
+
+            if (_interactables[_selectedIndex].IsPlaced)
+            {
+                UpdateStatusBar("All objects placed! Use Fist to reset.");
+                return;
             }
 
             _interactables[_selectedIndex].OnHoverEnter();
-            UpdateSidePanelText();
-            Debug.Log($"[ActionMapper] Point -> Selected {_interactables[_selectedIndex].objectName}");
+            UpdateStatusBar($"Selected: {_interactables[_selectedIndex].objectName}  |  Pinch to pick up");
+            Debug.Log($"[ActionMapper] Point -> Selected: {_interactables[_selectedIndex].objectName}");
         }
 
-        private void GrabSelectedObject()
+        private void TogglePinchAction()
         {
-            if (_selectedIndex >= 0 && _selectedIndex < _interactables.Count)
+            if (_selectedIndex < 0 || _selectedIndex >= _interactables.Count) return;
+            var obj = _interactables[_selectedIndex];
+
+            if (!_isPickedUp)
             {
-                _interactables[_selectedIndex].OnGrab();
-                _isGrabbed = true;
-                UpdateSidePanelText();
-                Debug.Log($"[ActionMapper] Pinch -> Grabbed {_interactables[_selectedIndex].objectName}");
+                // First pinch — pick up
+                obj.OnPickUp();
+                _isPickedUp = true;
+                UpdateStatusBar($"Holding: {obj.objectName}  |  Pinch to place  |  Fist to cancel");
+                ShowHintUI($"Ghost shows destination. Pinch again to place, or Fist to cancel.", false);
+                Debug.Log($"[ActionMapper] Pinch -> Picked up: {obj.objectName}");
+            }
+            else
+            {
+                // Second pinch — place
+                obj.OnPlace();
+                _isPickedUp = false;
+                _placedCount++;
+                UpdateScoreCounter();
+
+                int total = _interactables.Count;
+                UpdateStatusBar($"Placed! {_placedCount}/{total} objects placed. Point to select next.");
+                ShowHintUI($"{obj.objectName} placed successfully!", false);
+                _decisionEngine?.Tracker?.AdvanceToNextTask();
+
+                // Auto-deselect
+                _selectedIndex = -1;
+                Debug.Log($"[ActionMapper] Pinch -> Placed: {obj.objectName}");
+
+                if (_placedCount >= total)
+                    ShowHintUI("All objects placed! Lab complete! Use Fist to reset.", false);
+            }
+        }
+
+        private void CancelOrReset()
+        {
+            if (_isPickedUp && _selectedIndex >= 0 && _selectedIndex < _interactables.Count)
+            {
+                // Cancel current pick-up
+                _interactables[_selectedIndex].OnReturn();
+                _isPickedUp = false;
+                UpdateStatusBar("Cancelled. Point to select an object.");
+                ShowHintUI("Object returned to its spot.", false);
+                Debug.Log($"[ActionMapper] Fist -> Returned: {_interactables[_selectedIndex].objectName}");
+            }
+            else
+            {
+                // Hard reset — return all objects
+                foreach (var obj in _interactables)
+                    obj.OnReset();
+                _selectedIndex = -1;
+                _isPickedUp    = false;
+                _placedCount   = 0;
+                UpdateScoreCounter();
+                if (infoPanel != null) infoPanel.SetActive(false);
+                UpdateStatusBar("Reset! Point to select an object.");
+                Debug.Log("[ActionMapper] Fist -> Full reset");
             }
         }
 
@@ -230,52 +232,104 @@ namespace Adapter.Learning
             {
                 infoPanel.SetActive(!infoPanel.activeSelf);
                 UpdateSidePanelText();
-                Debug.Log($"[ActionMapper] Open Palm -> Toggled Info Panel ({infoPanel.activeSelf})");
+                Debug.Log($"[ActionMapper] Open Palm -> Info Panel {(infoPanel.activeSelf ? "shown" : "hidden")}");
+            }
+        }
+
+        private void Navigate()
+        {
+            _decisionEngine?.Tracker?.AdvanceToNextTask();
+            string task = _decisionEngine?.Tracker?.CurrentTask.ToString() ?? "Unknown";
+            UpdateStatusBar($"Task: {task}");
+            ShowHintUI($"Switched to task: {task}", false);
+            Debug.Log($"[ActionMapper] Swipe -> Task: {task}");
+        }
+
+        // =====================================================
+        // UI helpers
+        // =====================================================
+
+        private void SetupSideDockedUI()
+        {
+            if (infoPanel == null) return;
+
+            RectTransform rect = infoPanel.GetComponent<RectTransform>();
+            if (rect != null)
+            {
+                rect.anchorMin       = new Vector2(1f, 0.5f);
+                rect.anchorMax       = new Vector2(1f, 0.5f);
+                rect.pivot           = new Vector2(1f, 0.5f);
+                rect.anchoredPosition = new Vector2(-20f, 0f);
+                rect.sizeDelta       = new Vector2(320f, 400f);
+            }
+
+            // Create hint banner if missing
+            if (hintBanner == null && infoPanel.transform.parent != null)
+            {
+                Transform canvas = infoPanel.transform.parent;
+                Transform existing = canvas.Find("HintBanner");
+                if (existing != null)
+                {
+                    hintBanner = existing.gameObject;
+                }
+                else
+                {
+                    hintBanner = BuildHintBanner(canvas);
+                }
             }
         }
 
         private void UpdateSidePanelText()
         {
             if (infoPanel == null || !infoPanel.activeSelf) return;
-
             var textUI = infoPanel.GetComponentInChildren<Text>();
-            if (textUI != null)
-            {
-                string selectedName = (_selectedIndex >= 0 && _selectedIndex < _interactables.Count)
-                    ? _interactables[_selectedIndex].objectName
-                    : "None";
+            if (textUI == null) return;
 
-                string taskName = _decisionEngine?.Tracker != null ? _decisionEngine.Tracker.CurrentTask.ToString() : "ExploreLab";
-                int progress = _decisionEngine?.Tracker != null ? _decisionEngine.Tracker.CompletedTasksCount : 0;
-                string distStr = _decisionEngine?.Tracker != null ? _decisionEngine.Tracker.GetSnapshot(GestureType.Point, 0).Distance.ToString() : "Optimal";
+            string selName = (_selectedIndex >= 0 && _selectedIndex < _interactables.Count)
+                ? _interactables[_selectedIndex].objectName : "None";
+            string state   = _isPickedUp
+                ? "<color=yellow>HOLDING — Pinch to place | Fist to cancel</color>"
+                : (_selectedIndex >= 0 ? "<color=#88ff88>SELECTED — Pinch to pick up</color>" : "<color=#aaaaaa>None selected</color>");
+            string task    = _decisionEngine?.Tracker?.CurrentTask.ToString() ?? "ExploreLab";
+            int    done    = _decisionEngine?.Tracker?.CompletedTasksCount ?? 0;
+            int    total   = _interactables.Count;
 
-                textUI.text = $"<size=20><b>LAB INTERACTION</b></size>\n" +
-                              $"<color=#88ccff>────────────────────</color>\n" +
-                              $"<b>Target Object:</b> {selectedName}\n" +
-                              $"<b>State:</b> {(_isGrabbed ? "<color=yellow>GRABBED</color>" : "<color=#88ff88>SELECTED</color>")}\n" +
-                              $"<b>Activity:</b> {taskName}\n" +
-                              $"<b>Progress:</b> {progress} actions completed\n" +
-                              $"<b>Distance:</b> {distStr}\n\n" +
-                              $"<size=14><color=#aaaaaa><b>Gesture Legend:</b>\n" +
-                              $"• Point: Cycle Objects\n" +
-                              $"• Pinch: Grab Object\n" +
-                              $"• Open Palm: Toggle Panel\n" +
-                              $"• Fist: Reset/Release\n" +
-                              $"• Swipe: Next Task</color></size>";
-            }
+            textUI.text =
+                $"<size=19><b>LAB INTERACTION</b></size>\n" +
+                $"<color=#88ccff>────────────────────</color>\n" +
+                $"<b>Object:</b> {selName}\n" +
+                $"<b>State:</b> {state}\n\n" +
+                $"<b>Task:</b> {task}\n" +
+                $"<b>Placed:</b> {_placedCount}/{total}\n" +
+                $"<b>Actions:</b> {done}\n\n" +
+                $"<size=13><color=#aaaaaa><b>Controls:</b>\n" +
+                $"• Point  → Select / Cycle\n" +
+                $"• Pinch  → Pick up / Place\n" +
+                $"• Fist   → Cancel / Reset\n" +
+                $"• Palm   → Toggle this panel\n" +
+                $"• Swipe  → Next Task</color></size>";
+        }
+
+        private void UpdateScoreCounter()
+        {
+            if (scoreText == null) return;
+            int total = _interactables.Count > 0 ? _interactables.Count : 6;
+            scoreText.text = $"Placed: {_placedCount} / {total}";
+            scoreText.color = _placedCount >= total ? new Color(0.2f, 0.95f, 0.4f) : Color.white;
+        }
+
+        private void UpdateStatusBar(string message)
+        {
+            if (statusBarText != null)
+                statusBarText.text = message;
         }
 
         private void ShowHintUI(string hintMessage, bool isAlternative)
         {
             GameObject target = hintBanner != null ? hintBanner : infoPanel;
-            if (target != null && !string.IsNullOrEmpty(hintMessage))
-            {
-                if (_activeHintCoroutine != null)
-                {
-                    StopCoroutine(_activeHintCoroutine);
-                }
-                _activeHintCoroutine = StartCoroutine(DisplayHintBanner(target, hintMessage, isAlternative));
-            }
+            if (target == null || string.IsNullOrEmpty(hintMessage)) return;
+            if (_activeHintCoroutine != null) StopCoroutine(_activeHintCoroutine);
+            _activeHintCoroutine = StartCoroutine(DisplayHintBanner(target, hintMessage, isAlternative));
         }
 
         private IEnumerator DisplayHintBanner(GameObject banner, string message, bool isAlternative)
@@ -284,50 +338,52 @@ namespace Adapter.Learning
             Text textUI = banner.GetComponentInChildren<Text>();
             if (textUI != null)
             {
-                string prefix = isAlternative 
-                    ? "<color=#ffdd44><b>Adaptive Fallback:</b></color> " 
-                    : "<color=#55ddff><b>Guidance:</b></color> ";
-                textUI.text = $"{prefix}{message}";
+                string prefix = isAlternative
+                    ? "<color=#ffdd44><b>Suggestion:</b></color> "
+                    : "<color=#55ddff><b>Tip:</b></color> ";
+                textUI.text = prefix + message;
             }
-
             yield return new WaitForSeconds(hintDisplayDuration);
-
-            // Hide hint banner after duration (if it's the dedicated banner)
-            if (banner == hintBanner)
-            {
-                banner.SetActive(false);
-            }
+            if (banner == hintBanner) banner.SetActive(false);
             _activeHintCoroutine = null;
         }
 
-        private void ResetActions()
+        private void RefreshInteractables()
         {
-            if (infoPanel != null)
-                infoPanel.SetActive(false);
-
-            if (_selectedIndex >= 0 && _selectedIndex < _interactables.Count)
-            {
-                _interactables[_selectedIndex].OnRelease();
-                _interactables[_selectedIndex].OnHoverExit();
-            }
-            _selectedIndex = -1;
-            _isGrabbed = false;
-            Debug.Log("[ActionMapper] Fist -> Reset actions");
+            if (_interactables.Count == 0)
+                _interactables = new List<InteractableObject>(FindObjectsOfType<InteractableObject>());
         }
 
-        private void Navigate()
+        // ---- UI factory ----
+
+        private GameObject BuildHintBanner(Transform canvas)
         {
-            Debug.Log("[ActionMapper] Swipe -> Navigating");
-            if (_decisionEngine?.Tracker != null)
-            {
-                _decisionEngine.Tracker.AdvanceToNextTask();
-                UpdateSidePanelText();
-                ShowHintUI($"Switched to task: {_decisionEngine.Tracker.CurrentTask}", false);
-            }
-            else
-            {
-                SelectNextObject();
-            }
+            GameObject bannerObj = new GameObject("HintBanner");
+            bannerObj.transform.SetParent(canvas, false);
+            Image bg = bannerObj.AddComponent<Image>();
+            bg.color = new Color(0.05f, 0.08f, 0.14f, 0.93f);
+            RectTransform r = bannerObj.GetComponent<RectTransform>();
+            r.anchorMin       = new Vector2(0.5f, 0f);
+            r.anchorMax       = new Vector2(0.5f, 0f);
+            r.pivot           = new Vector2(0.5f, 0f);
+            r.anchoredPosition = new Vector2(0, 28f);
+            r.sizeDelta       = new Vector2(680f, 58f);
+
+            GameObject textObj = new GameObject("HintText");
+            textObj.transform.SetParent(bannerObj.transform, false);
+            Text t = textObj.AddComponent<Text>();
+            t.font      = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            t.fontSize  = 17;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.color     = new Color(0.4f, 0.92f, 1f);
+            RectTransform tr = textObj.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero;
+            tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(14f, 6f);
+            tr.offsetMax = new Vector2(-14f, -6f);
+
+            bannerObj.SetActive(false);
+            return bannerObj;
         }
     }
 }
