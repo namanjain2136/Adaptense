@@ -24,7 +24,7 @@ namespace Adapter.Environment
         [Tooltip("The drop zone Transform on the destination table where this belongs.")]
         public Transform placementTarget;
 
-        [Header("State")]
+        // ---- state (read-only externally) ----
         public bool IsSelected  { get; private set; }
         public bool IsPickedUp  { get; private set; }
         public bool IsPlaced    { get; private set; }
