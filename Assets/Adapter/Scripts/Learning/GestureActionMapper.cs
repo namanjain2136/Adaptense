@@ -1,14 +1,10 @@
 ﻿// ============================================================
-// ADAPTER Project — Phase 6 (Updated Gesture Mapping)
+// ADAPTER Project — Phase 6 (PGL Integrated)
 // GestureActionMapper.cs
 //
 // PURPOSE:
-//   Maps recognized gestures according to user specification:
-//     Point     -> Select / Cycle objects
-//     Fist      -> Pick Up (1st Fist) / Place (2nd Fist)
-//     Pinch     -> Reset / Cancel hold
-//     Open Palm -> Open / Toggle Info Panel
-//     Swipe     -> Next Level / Task
+//   Maps recognized gestures to scene actions and reports action
+//   executions to Phase 6 GesturePGLManager for level advancement.
 // ============================================================
 
 using System.Collections;
@@ -19,6 +15,7 @@ using Adapter.Gesture;
 using Adapter.Environment;
 using Adapter.Adaptation;
 using Adapter.Context;
+using Adapter.Progression;
 
 namespace Adapter.Learning
 {
@@ -33,9 +30,13 @@ namespace Adapter.Learning
         public GameObject infoPanel;
         public GameObject hintBanner;
 
-        // Injected at runtime for the score counter
+        // Injected at runtime for the UI
         [HideInInspector] public Text scoreText;
         [HideInInspector] public Text statusBarText;
+        [HideInInspector] public Text taskChecklistText;
+
+        [Header("PGL Progression Reference")]
+        public GesturePGLManager pglManager;
 
         [Header("Decision Engine")]
         [SerializeField] private ContextAwareDecisionEngine _decisionEngine;
@@ -66,6 +67,12 @@ namespace Adapter.Learning
             {
                 _decisionEngine = GetComponent<ContextAwareDecisionEngine>()
                                   ?? gameObject.AddComponent<ContextAwareDecisionEngine>();
+            }
+
+            if (pglManager == null)
+            {
+                pglManager = GetComponent<GesturePGLManager>()
+                             ?? gameObject.AddComponent<GesturePGLManager>();
             }
 
             // Always force InfoPanel hidden at startup
@@ -113,6 +120,9 @@ namespace Adapter.Learning
 
         private void ExecuteAction(GestureType gesture, AdaptationResult adaptation)
         {
+            string objName = (_selectedIndex >= 0 && _selectedIndex < _interactables.Count)
+                ? _interactables[_selectedIndex].objectName : "";
+
             switch (gesture)
             {
                 case GestureType.Point:      SelectNextObject();  break;
@@ -121,6 +131,9 @@ namespace Adapter.Learning
                 case GestureType.OpenPalm:   OpenInfoPanel();     break;
                 case GestureType.Swipe:      NextLevel();         break;
             }
+
+            // Notify PGL progression manager of executed action for level-up tracking
+            pglManager?.NotifyActionExecuted(gesture, objName, gesture.ToString());
 
             if (adaptation.Decision == DecisionType.MakeInteractionEasier)
                 ShowHintUI($"Adaptive mode: Threshold {adaptation.AdjustedThreshold:F2}", false);
@@ -238,10 +251,17 @@ namespace Adapter.Learning
 
         private void NextLevel()
         {
-            _decisionEngine?.Tracker?.AdvanceToNextTask();
+            if (pglManager != null)
+            {
+                pglManager.AdvanceToNextLevel();
+            }
+            else
+            {
+                _decisionEngine?.Tracker?.AdvanceToNextTask();
+            }
             string task = _decisionEngine?.Tracker?.CurrentTask.ToString() ?? "Unknown";
             UpdateStatusBar($"Level / Task: {task}");
-            ShowHintUI($"Switched to next level: {task}", false);
+            ShowHintUI($"Switched to next level!", false);
             Debug.Log($"[ActionMapper] Swipe/Palm -> Next Level: {task}");
         }
 
@@ -293,13 +313,15 @@ namespace Adapter.Learning
             string task    = _decisionEngine?.Tracker?.CurrentTask.ToString() ?? "ExploreLab";
             int    done    = _decisionEngine?.Tracker?.CompletedTasksCount ?? 0;
             int    total   = _interactables.Count;
+            string pglLvl  = pglManager != null ? pglManager.GetLevelTitle(pglManager.currentLevel) : "Level 1";
 
             textUI.text =
                 $"<size=19><b>LAB INTERACTION</b></size>\n" +
                 $"<color=#88ccff>────────────────────</color>\n" +
                 $"<b>Object:</b> {selName}\n" +
                 $"<b>State:</b> {state}\n\n" +
-                $"<b>Level:</b> {task}\n" +
+                $"<b>PGL Level:</b> {pglLvl}\n" +
+                $"<b>Task:</b> {task}\n" +
                 $"<b>Placed:</b> {_placedCount}/{total}\n" +
                 $"<b>Actions:</b> {done}\n\n" +
                 $"<size=13><color=#aaaaaa><b>Controls:</b>\n" +

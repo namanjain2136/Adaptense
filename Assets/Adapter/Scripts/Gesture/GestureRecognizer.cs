@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // ADAPTER Project — Phase 2
 // GestureRecognizer.cs
 //
@@ -170,10 +170,9 @@ namespace Adapter.Gesture
                 if (timeDelta > 0.01f) // avoid division by zero
                 {
                     // Speed in normalized screen units per second
+                    // 0.45 units/sec is a clean, natural hand wave/swipe across camera
                     float speed = dist / timeDelta; 
-                    
-                    // 1.5 units/sec is a very fast, deliberate swipe
-                    return Mathf.Clamp01(speed / 1.5f);
+                    return Mathf.Clamp01(speed / 0.45f);
                 }
             }
             return 0f;

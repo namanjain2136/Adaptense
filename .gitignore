@@ -1,4 +1,4 @@
-# ============================================
+﻿# ============================================
 # Adaptense — .gitignore
 # ============================================
 
@@ -22,6 +22,7 @@
 .DS_Store
 .python-version
 Thumbs.db
+~$*
 
 # === Native binaries (blanket ignore, then whitelist MediaPipe) ===
 *.aar

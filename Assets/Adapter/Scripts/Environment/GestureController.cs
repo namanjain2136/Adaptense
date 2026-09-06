@@ -1,10 +1,11 @@
-// ============================================================
-// ADAPTER Project — Pipeline Controller
+﻿// ============================================================
+// ADAPTER Project — Pipeline Controller (with PGL Integration)
 // GestureController.cs
 //
 // PURPOSE:
 //   Orchestrates the complete ADAPTER pipeline:
 //   Phase 2 (GestureRecognizer) 
+//     ──> Phase 6 PGL (GesturePGLManager - Gesture Gating)
 //     ──> Phase 5 (ContextAwareDecisionEngine + ContextTracker)
 //     ──> Phase 4 (GestureActionMapper)
 // ============================================================
@@ -15,6 +16,7 @@ using Adapter.Gesture;
 using Adapter.Adaptation;
 using Adapter.Context;
 using Adapter.Learning;
+using Adapter.Progression;
 
 namespace Adapter.Environment
 {
@@ -31,6 +33,7 @@ namespace Adapter.Environment
         private ContextTracker _tracker;
         private ContextAwareDecisionEngine _decisionEngine;
         private GestureActionMapper _actionMapper;
+        private GesturePGLManager _pglManager;
         private bool _isSubscribed = false;
 
         public GestureRecognizer recognizer
@@ -51,6 +54,7 @@ namespace Adapter.Environment
         public ContextAwareDecisionEngine DecisionEngine => _decisionEngine;
         public ContextTracker ContextTracker => _tracker;
         public GestureActionMapper ActionMapper => _actionMapper;
+        public GesturePGLManager PGLManager => _pglManager;
 
         private void Awake()
         {
@@ -70,21 +74,28 @@ namespace Adapter.Environment
 
         private void EnsureInitialized()
         {
-            // 1. Attach and wire Phase 5 Context Tracking
+            // 1. Attach and wire Phase 6 PGL Manager
+            if (_pglManager == null)
+            {
+                _pglManager = gameObject.GetComponent<GesturePGLManager>();
+                if (_pglManager == null) _pglManager = gameObject.AddComponent<GesturePGLManager>();
+            }
+
+            // 2. Attach and wire Phase 5 Context Tracking
             if (_tracker == null)
             {
                 _tracker = gameObject.GetComponent<ContextTracker>();
                 if (_tracker == null) _tracker = gameObject.AddComponent<ContextTracker>();
             }
 
-            // 2. Attach and wire Phase 5 Decision Engine
+            // 3. Attach and wire Phase 5 Decision Engine
             if (_decisionEngine == null)
             {
                 _decisionEngine = gameObject.GetComponent<ContextAwareDecisionEngine>();
                 if (_decisionEngine == null) _decisionEngine = gameObject.AddComponent<ContextAwareDecisionEngine>();
             }
 
-            // 3. Attach and wire Phase 4 Action Mapper
+            // 4. Attach and wire Phase 4 Action Mapper
             if (_actionMapper == null)
             {
                 _actionMapper = gameObject.GetComponent<GestureActionMapper>();
@@ -95,6 +106,7 @@ namespace Adapter.Environment
             {
                 _actionMapper.infoPanel = infoPanel;
                 _actionMapper.DecisionEngine = _decisionEngine;
+                _actionMapper.pglManager = _pglManager;
             }
         }
 
@@ -102,9 +114,9 @@ namespace Adapter.Environment
         {
             if (_recognizer != null && _actionMapper != null && !_isSubscribed)
             {
-                _recognizer.OnGesturesEvaluated += _actionMapper.HandleGestures;
+                _recognizer.OnGesturesEvaluated += OnRawGesturesReceived;
                 _isSubscribed = true;
-                Debug.Log("[GestureController] Fully wired pipeline: GestureRecognizer -> DecisionEngine -> GestureActionMapper.");
+                Debug.Log("[GestureController] Fully wired pipeline: GestureRecognizer -> GesturePGLManager -> DecisionEngine -> GestureActionMapper.");
             }
         }
 
@@ -112,8 +124,24 @@ namespace Adapter.Environment
         {
             if (_recognizer != null && _actionMapper != null && _isSubscribed)
             {
-                _recognizer.OnGesturesEvaluated -= _actionMapper.HandleGestures;
+                _recognizer.OnGesturesEvaluated -= OnRawGesturesReceived;
                 _isSubscribed = false;
+            }
+        }
+
+        private void OnRawGesturesReceived(List<DetectedGesture> rawGestures)
+        {
+            // Gate gestures through Phase 6 PGL Manager first
+            List<DetectedGesture> gatedGestures = rawGestures;
+            if (_pglManager != null)
+            {
+                gatedGestures = _pglManager.FilterGesturesForCurrentLevel(rawGestures);
+            }
+
+            // Send gated gestures into Action Mapper -> Decision Engine
+            if (_actionMapper != null)
+            {
+                _actionMapper.HandleGestures(gatedGestures);
             }
         }
 

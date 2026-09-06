@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // ADAPTER Project — Phase 5
 // ContextAwareDecisionEngine.cs
 //
@@ -39,7 +39,7 @@ namespace Adapter.Adaptation
 
         [Header("Adaptation Parameters")]
         [Tooltip("Failed attempts before showing visual guidance hints.")]
-        [SerializeField] private int _hintFailureThreshold = 2;
+        [SerializeField] private int _hintFailureThreshold = 1;
 
         [Tooltip("Failed attempts before suggesting an alternative gesture.")]
         [SerializeField] private int _alternativeGestureFailureThreshold = 4;

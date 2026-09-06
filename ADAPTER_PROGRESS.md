@@ -1,4 +1,4 @@
-# ADAPTER_PROGRESS.md
+﻿# ADAPTER_PROGRESS.md
 
 > **Antigravity: read this entire file before doing anything.**
 > Find the FIRST unchecked box under "To-Do". Do only that one task.
@@ -73,22 +73,18 @@
 - [x] Wire decision engine between Phase 2 (gestures) and Phase 4 (actions)
 
 ### Phase 6 — Progressive Gesture Learning (PGL), level-based [Novelty 2]
-- [ ] Define a GestureLevel enum/class: Level1..Level5, each listing which
-      gesture(s) are unlocked at that level
-- [ ] Level 1: Point (Select) + Open Palm (Info panel) + 2-3 objects
-- [ ] Level 2: adds Swipe (Navigate the object to select) + 4 objects
-- [ ] Level 3: adds pinch (Reset/cancel) + 2--4 objects
-- [ ] Level 4: adds fist (Grab/interact) + 3-4 objects
-- [ ] Level 5: all 5 gestures active — mastery/free-interaction level + 5-6 objects
-- [ ] Only gestures unlocked at the current level should reach Phase 4's
-      action mapping; others are visibly ignored (log why)
-- [ ] Define a simple "level task" per level (e.g. Level 1 = select 2
-      different objects AND open 1 info panel) that must be completed to
-      advance — not just a raw use-count
-- [ ] Add a minimal on-screen level indicator + short in-scene instruction
-      text telling the learner what to try at their current level
-- [ ] On reaching Level 5, show a short "all gestures unlocked" message
-- [ ] Log level-up events for later use by PIP (Phase 7)
+- [x] Rearranged Level Design:
+      - Level 1: Palms Only (Single Palm = Info Panel, Double Palm = Description Modal)
+      - Level 2: Adds Point (Select) + Swipe (Navigate objects)
+      - Level 3: Adds Pinch (Reset / Cancel hold)
+      - Level 4: Adds Fist (Grab & Move object to drop zone)
+      - Level 5: All 5 gestures active — Mastery / Free Interaction
+- [x] Level Description Modal: Opens automatically before each level with a 3-5s transition countdown and can be operated/toggled using Palm gestures.
+- [x] Inter-Level Gap: 3-5 second delay between level transitions showing upcoming level description.
+- [x] Increased Hint Popups: Reduced hint failure threshold to 1 so visual guidance hints appear more frequently during interaction.
+- [x] Gesture Gating: Only gestures unlocked at the active level reach Phase 4; locked gestures are logged with clear feedback.
+- [x] Task-Based Level Advancement: Specific task objectives per level required to unlock next level.
+- [x] UI & Logging: Level badge card, status instruction bar, task checklist, animated toast notifications, and level-up logging.
 
 ### Phase 7 -- GitHub polish & documentation
 - [ ] Rewrite README.md for Adaptense branding (project overview, setup, architecture)
@@ -98,6 +94,29 @@
 ---
 
 ## Completed Log
+
+### [2026-09-06 16:30] Task: Phase 6 (Level-Based Progressive Gesture Learning & Description Modal)
+Files changed / created:
+- Assets/Adapter/Scripts/Progression/GesturePGLManager.cs [NEW]
+- Assets/Adapter/Scripts/Environment/DropZone.cs [NEW]
+- Assets/Adapter/Scripts/Environment/GestureController.cs [MODIFIED]
+- Assets/Adapter/Scripts/Learning/GestureActionMapper.cs [MODIFIED]
+- Assets/Adapter/Scripts/Editor/LabSceneBuilder.cs [MODIFIED]
+- Assets/Adapter/Scripts/Adaptation/ContextAwareDecisionEngine.cs [MODIFIED]
+- Assets/Adapter/Scripts/Gesture/GestureRecognizer.cs [MODIFIED]
+- ADAPTER_PROGRESS.md [MODIFIED]
+
+Summary:
+1. Progressive Gesture Learning (PGL): Built 5 discrete levels with strict gesture gating:
+   - Level 1: Palms Only (Single Palm = Info Panel, Double Palm = Description Modal)
+   - Level 2: Point (Select) + Swipe (Navigate selection)
+   - Level 3: Pinch (Reset / Cancel hold)
+   - Level 4: Fist (Grab & Move object to drop zone)
+   - Level 5: All 5 gestures active (Mastery Mode)
+2. Level Description Modal: Built centered dialog modal that displays level objectives and unlocks, with a 4s inter-level transition timer. Can be operated/toggled using Open Palm gestures.
+3. Enhanced Hinting: Lowered hint threshold to 1 for immediate contextual feedback when gesturing.
+4. Swipe Sensitivity: Tuned swipe velocity threshold from 1.5 to 0.45 units/sec for effortless hand wave detection.
+5. Large 3D Prominent Objects: Scaled up 6 3D interactable objects and drop zones at Z=1.4 for clean viewing without obscuring camera.
 
 ### [2026-09-04 13:00] Task: UX/UI Polish, Side-Docked Panel, 2.5s Hints & 3D Animations
 Files changed:

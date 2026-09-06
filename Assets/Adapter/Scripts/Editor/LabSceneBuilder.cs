@@ -1,14 +1,8 @@
 ﻿// ============================================================
-// ADAPTER Project — Phase 6 (UI Polish & Object Scale Fix)
+// ADAPTER Project — Phase 6 (PGL Level Description Modal & UI)
 // LabSceneBuilder.cs
 //
 // Adapter > Build Phase 6 Lab Scene
-//
-// Fixes:
-//  1. Positioned objects closer to camera (Z=1.4) & scaled 4x larger
-//     so they are big, clear 3D items on screen instead of tiny dots.
-//  2. Fixed "PLACE HERE" UI text overlap under top status bar.
-//  3. Polished UI canvas styling & spacing.
 // ============================================================
 
 using UnityEngine;
@@ -19,6 +13,7 @@ using UnityEngine.UI;
 using Adapter.Environment;
 using Adapter.Gesture;
 using Adapter.Learning;
+using Adapter.Progression;
 
 namespace Adapter.EditorScripts
 {
@@ -33,15 +28,13 @@ namespace Adapter.EditorScripts
             string scenePath = "Assets/Adapter/Scenes/Lab.unity";
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
 
-            // Remove default camera — Hand Tracking scene provides one
             if (Camera.main != null) GameObject.DestroyImmediate(Camera.main.gameObject);
             var defaultLight = GameObject.Find("Directional Light");
             if (defaultLight != null) GameObject.DestroyImmediate(defaultLight);
 
             // ─────────────────────────────────────────────────────
-            // 6 LARGE INTERACTABLE OBJECTS (closer to camera Z=1.4)
+            // 6 LARGE INTERACTABLE OBJECTS (Z=1.4)
             // ─────────────────────────────────────────────────────
-            // X coordinates spread across screen width at Z=1.4
             float[] xCoords = new float[] { -1.35f, -0.81f, -0.27f, 0.27f, 0.81f, 1.35f };
             float objY = -0.55f;
             float dzY  = 0.45f;
@@ -65,7 +58,6 @@ namespace Adapter.EditorScripts
                 var d = defs[i];
                 float x = xCoords[i];
 
-                // --- Very prominent source object ---
                 Vector3 objScale = ProminentObjectScale(d.shape);
                 var obj = MakePrimitive(d.name, d.shape,
                     new Vector3(x, objY, zPos), objScale, d.color);
@@ -73,7 +65,6 @@ namespace Adapter.EditorScripts
                 interactable.objectName = d.name;
                 objects[i] = obj;
 
-                // --- Drop zone (prominent target marker) ---
                 var dz = MakePrimitive($"DropZone_{d.name}", "Cylinder",
                     new Vector3(x, dzY, zPos),
                     new Vector3(0.38f, 0.02f, 0.38f),
@@ -99,34 +90,54 @@ namespace Adapter.EditorScripts
 
             Font font = Resources.GetBuiltinResource<Font>("Arial.ttf");
 
-            // Row headers (placed cleanly without cut-offs)
+            // Row headers
             BuildZoneLabels(canvasObj.transform, font);
             BuildObjectLabels(canvasObj.transform, font);
 
-            // Score counter — top-left
-            var scoreGo   = BuildScoreCounter(canvasObj.transform, font);
-            // Status bar  — top-center
-            var statusGo  = BuildStatusBar(canvasObj.transform, font);
-            // Hint banner — bottom-center
-            var hintGo    = BuildHintBanner(canvasObj.transform, font);
-            // Info panel  — right edge (starts HIDDEN)
+            // 1. Level Badge Card — top-left
+            var levelBadgeGo = BuildLevelBadgeCard(canvasObj.transform, font);
+
+            // 2. Status / Instruction bar — top-center
+            var statusGo = BuildStatusBar(canvasObj.transform, font);
+
+            // 3. Task Checklist bar — below status bar
+            var taskChecklistGo = BuildTaskChecklistBar(canvasObj.transform, font);
+
+            // 4. Hint banner — bottom-center
+            var hintGo = BuildHintBanner(canvasObj.transform, font);
+
+            // 5. Info panel — right edge (starts HIDDEN)
             var infoPanelGo = BuildInfoPanel(canvasObj.transform, font);
+
+            // 6. Level Up Toast Banner — center pop-up (starts HIDDEN)
+            var levelUpToastGo = BuildLevelUpToast(canvasObj.transform, font);
+
+            // 7. Level Description Modal — center dialog modal
+            var levelDescModalGo = BuildLevelDescriptionModal(canvasObj.transform, font);
 
             // Divider line
             BuildDividerLine(canvasObj.transform);
 
             // ─────────────────────────────────────────────────────
-            // GESTURE CONTROLLER
+            // GESTURE CONTROLLER + PGL MANAGER
             // ─────────────────────────────────────────────────────
             var controllerObj = new GameObject("HandGestureController");
             var controller    = controllerObj.AddComponent<GestureController>();
             controller.infoPanel = infoPanelGo;
 
+            var pglManager = controllerObj.AddComponent<GesturePGLManager>();
+            pglManager.levelBadgeText        = levelBadgeGo.transform.Find("LevelBadgeText").GetComponent<Text>();
+            pglManager.instructionBannerText = statusGo.GetComponentInChildren<Text>();
+            pglManager.taskChecklistText     = taskChecklistGo.GetComponentInChildren<Text>();
+            pglManager.levelUpToastBanner    = levelUpToastGo;
+            pglManager.levelDescriptionModal = levelDescModalGo;
+
             var actionMapper = controllerObj.AddComponent<GestureActionMapper>();
-            actionMapper.infoPanel     = infoPanelGo;
-            actionMapper.hintBanner    = hintGo;
-            actionMapper.scoreText     = scoreGo.GetComponentInChildren<Text>();
-            actionMapper.statusBarText = statusGo.GetComponentInChildren<Text>();
+            actionMapper.infoPanel        = infoPanelGo;
+            actionMapper.hintBanner       = hintGo;
+            actionMapper.scoreText        = levelBadgeGo.transform.Find("ScoreText").GetComponent<Text>();
+            actionMapper.statusBarText    = statusGo.GetComponentInChildren<Text>();
+            actionMapper.pglManager       = pglManager;
 
             // ─────────────────────────────────────────────────────
             // SAVE
@@ -144,7 +155,7 @@ namespace Adapter.EditorScripts
                 EditorBuildSettings.scenes = updated;
             }
 
-            Debug.Log("[Adaptense] Phase 6 Lab Scene (Prominent UI & Objects) built at " + scenePath);
+            Debug.Log("[Adaptense] Phase 6 Lab Scene (PGL + Modal) built successfully at " + scenePath);
         }
 
         // =====================================================
@@ -168,7 +179,6 @@ namespace Adapter.EditorScripts
 
         private static Vector3 ProminentObjectScale(string shape)
         {
-            // Significantly larger so items are easily visible at Z=1.4
             return shape == "Cylinder" ? new Vector3(0.28f, 0.38f, 0.28f)
                  : shape == "Sphere"   ? new Vector3(0.35f, 0.35f, 0.35f)
                                        : new Vector3(0.36f, 0.22f, 0.44f);
@@ -178,22 +188,20 @@ namespace Adapter.EditorScripts
 
         private static void BuildZoneLabels(Transform canvas, Font font)
         {
-            // Positioned cleanly below the status bar (y = -72px from top)
             MakeLabel(canvas, "DropZoneHeader",
                 "▼  DESTINATION DROP ZONES  ▼",
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0, -78f), new Vector2(460f, 32f),
-                14, new Color(0.35f, 0.92f, 1f), font);
+                new Vector2(0, -104f), new Vector2(440f, 26f),
+                13, new Color(0.35f, 0.92f, 1f), font);
         }
 
         private static void BuildObjectLabels(Transform canvas, Font font)
         {
-            // Positioned cleanly near bottom above camera controls (y = 82px from bottom)
             MakeLabel(canvas, "ObjectRowHeader",
                 "▲  SOURCE OBJECTS (POINT TO SELECT)  ▲",
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0, 82f), new Vector2(480f, 32f),
-                14, new Color(0.98f, 0.88f, 0.35f), font);
+                new Vector2(0, 82f), new Vector2(460f, 30f),
+                13, new Color(0.98f, 0.88f, 0.35f), font);
         }
 
         private static void BuildDividerLine(Transform canvas)
@@ -238,32 +246,43 @@ namespace Adapter.EditorScripts
             var tr   = tGo.GetComponent<RectTransform>();
             tr.anchorMin = Vector2.zero;
             tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(8, 4);
-            tr.offsetMax = new Vector2(-8, -4);
+            tr.offsetMin = new Vector2(8, 3);
+            tr.offsetMax = new Vector2(-8, -3);
             return go;
         }
 
-        private static GameObject BuildScoreCounter(Transform canvas, Font font)
+        private static GameObject BuildLevelBadgeCard(Transform canvas, Font font)
         {
-            var go = new GameObject("ScoreCounter");
+            var go = new GameObject("LevelBadgeCard");
             go.transform.SetParent(canvas, false);
-            go.AddComponent<Image>().color = new Color(0.04f, 0.07f, 0.13f, 0.90f);
+            go.AddComponent<Image>().color = new Color(0.04f, 0.07f, 0.14f, 0.92f);
             var r = go.GetComponent<RectTransform>();
             r.anchorMin = new Vector2(0f, 1f);
             r.anchorMax = new Vector2(0f, 1f);
             r.pivot     = new Vector2(0f, 1f);
             r.anchoredPosition = new Vector2(16f, -16f);
-            r.sizeDelta = new Vector2(170f, 44f);
+            r.sizeDelta = new Vector2(210f, 74f);
 
-            var tGo = new GameObject("ScoreText");
-            tGo.transform.SetParent(go.transform, false);
-            var t   = tGo.AddComponent<Text>();
-            t.font      = font; t.fontSize = 18; t.fontStyle = FontStyle.Bold;
-            t.alignment = TextAnchor.MiddleCenter; t.color = Color.white;
-            t.text      = "Placed: 0 / 6";
-            var tr  = tGo.GetComponent<RectTransform>();
-            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(6, 4); tr.offsetMax = new Vector2(-6, -4);
+            var lvlTextGo = new GameObject("LevelBadgeText");
+            lvlTextGo.transform.SetParent(go.transform, false);
+            var t1   = lvlTextGo.AddComponent<Text>();
+            t1.font      = font; t1.fontSize = 17; t1.fontStyle = FontStyle.Bold;
+            t1.alignment = TextAnchor.UpperLeft; t1.color = new Color(0.4f, 0.92f, 1f);
+            t1.text      = "LEVEL 1 / 5\n<size=12><color=#88ccff>Palm Discovery</color></size>";
+            var tr1  = lvlTextGo.GetComponent<RectTransform>();
+            tr1.anchorMin = Vector2.zero; tr1.anchorMax = Vector2.one;
+            tr1.offsetMin = new Vector2(10, 26); tr1.offsetMax = new Vector2(-10, -6);
+
+            var scoreTextGo = new GameObject("ScoreText");
+            scoreTextGo.transform.SetParent(go.transform, false);
+            var t2   = scoreTextGo.AddComponent<Text>();
+            t2.font      = font; t2.fontSize = 13;
+            t2.alignment = TextAnchor.LowerLeft; t2.color = Color.white;
+            t2.text      = "Placed: 0 / 6";
+            var tr2  = scoreTextGo.GetComponent<RectTransform>();
+            tr2.anchorMin = Vector2.zero; tr2.anchorMax = Vector2.one;
+            tr2.offsetMin = new Vector2(10, 6); tr2.offsetMax = new Vector2(-10, -50);
+
             return go;
         }
 
@@ -271,24 +290,49 @@ namespace Adapter.EditorScripts
         {
             var go = new GameObject("StatusBar");
             go.transform.SetParent(canvas, false);
-            go.AddComponent<Image>().color = new Color(0.04f, 0.06f, 0.11f, 0.92f);
+            go.AddComponent<Image>().color = new Color(0.04f, 0.06f, 0.11f, 0.94f);
             var r = go.GetComponent<RectTransform>();
             r.anchorMin = new Vector2(0.5f, 1f);
             r.anchorMax = new Vector2(0.5f, 1f);
             r.pivot     = new Vector2(0.5f, 1f);
             r.anchoredPosition = new Vector2(0f, -16f);
-            r.sizeDelta = new Vector2(640f, 44f);
+            r.sizeDelta = new Vector2(660f, 44f);
 
             var tGo = new GameObject("StatusText");
             tGo.transform.SetParent(go.transform, false);
             var t   = tGo.AddComponent<Text>();
-            t.font = font; t.fontSize = 16;
+            t.font = font; t.fontSize = 15;
             t.alignment = TextAnchor.MiddleCenter;
             t.color = new Color(0.85f, 0.95f, 1f);
-            t.text  = "Point to select an object  |  Fist to move  |  Pinch to reset";
+            t.text  = "<b>Level 1:</b> Single Palm = Info Panel  |  Double Palm = Description Modal";
             var tr  = tGo.GetComponent<RectTransform>();
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = new Vector2(10, 4); tr.offsetMax = new Vector2(-10, -4);
+            return go;
+        }
+
+        private static GameObject BuildTaskChecklistBar(Transform canvas, Font font)
+        {
+            var go = new GameObject("TaskChecklistBar");
+            go.transform.SetParent(canvas, false);
+            go.AddComponent<Image>().color = new Color(0.03f, 0.05f, 0.09f, 0.88f);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(0.5f, 1f);
+            r.anchorMax = new Vector2(0.5f, 1f);
+            r.pivot     = new Vector2(0.5f, 1f);
+            r.anchoredPosition = new Vector2(0f, -64f);
+            r.sizeDelta = new Vector2(560f, 32f);
+
+            var tGo = new GameObject("ChecklistText");
+            tGo.transform.SetParent(go.transform, false);
+            var t   = tGo.AddComponent<Text>();
+            t.font = font; t.fontSize = 13;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.color = new Color(0.9f, 0.95f, 1f);
+            t.text  = "<color=#ffaa44>○</color> Open Info Panel (Single Palm)  |  <color=#ffaa44>○</color> Open Description (Double Palm)";
+            var tr  = tGo.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(8, 2); tr.offsetMax = new Vector2(-8, -2);
             return go;
         }
 
@@ -343,7 +387,70 @@ namespace Adapter.EditorScripts
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = new Vector2(14, 14); tr.offsetMax = new Vector2(-14, -14);
 
-            go.SetActive(false); // ALWAYS starts hidden
+            go.SetActive(false);
+            return go;
+        }
+
+        private static GameObject BuildLevelUpToast(Transform canvas, Font font)
+        {
+            var go = new GameObject("LevelUpToastBanner");
+            go.transform.SetParent(canvas, false);
+            var img = go.AddComponent<Image>();
+            img.color = new Color(0.03f, 0.15f, 0.28f, 0.96f);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(0.5f, 0.5f);
+            r.anchorMax = new Vector2(0.5f, 0.5f);
+            r.pivot     = new Vector2(0.5f, 0.5f);
+            r.anchoredPosition = new Vector2(0f, 130f);
+            r.sizeDelta = new Vector2(520f, 90f);
+
+            var tGo = new GameObject("ToastText");
+            tGo.transform.SetParent(go.transform, false);
+            var t = tGo.AddComponent<Text>();
+            t.font = font; t.fontSize = 19;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.lineSpacing = 1.2f;
+            t.color = Color.white;
+            t.text  = "<size=21><b>🎉 LEVEL UP! Level 2 Reached</b></size>\n<color=#55eefd>UNLOCKED: Point (Select) & Swipe (Navigate)</color>";
+            var tr = tGo.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(16, 8); tr.offsetMax = new Vector2(-16, -8);
+
+            go.SetActive(false);
+            return go;
+        }
+
+        private static GameObject BuildLevelDescriptionModal(Transform canvas, Font font)
+        {
+            var go = new GameObject("LevelDescriptionModal");
+            go.transform.SetParent(canvas, false);
+            var img = go.AddComponent<Image>();
+            img.color = new Color(0.04f, 0.08f, 0.16f, 0.96f);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = new Vector2(0.5f, 0.5f);
+            r.anchorMax = new Vector2(0.5f, 0.5f);
+            r.pivot     = new Vector2(0.5f, 0.5f);
+            r.anchoredPosition = new Vector2(0f, 10f);
+            r.sizeDelta = new Vector2(580f, 320f);
+
+            var tGo = new GameObject("ModalText");
+            tGo.transform.SetParent(go.transform, false);
+            var t = tGo.AddComponent<Text>();
+            t.font = font; t.fontSize = 16;
+            t.alignment   = TextAnchor.MiddleCenter;
+            t.lineSpacing = 1.35f;
+            t.color       = Color.white;
+            t.text        = "<size=22><b>LEVEL 1: PALM DISCOVERY</b></size>\n" +
+                            "<color=#55eefd>UNLOCKED: Single Open Palm & Double Open Palm</color>\n\n" +
+                            "<b>Controls:</b>\n" +
+                            "• Single Palm → Toggle Info Panel\n" +
+                            "• Double Palm → Toggle Description Modal\n\n" +
+                            "<b>Objective:</b> Open Info Panel once + Open Description Modal once.";
+            var tr = tGo.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(20, 16); tr.offsetMax = new Vector2(-20, -16);
+
+            go.SetActive(false);
             return go;
         }
     }
